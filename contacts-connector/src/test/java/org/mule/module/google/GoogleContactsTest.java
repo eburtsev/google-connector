@@ -20,9 +20,7 @@
  */
 package org.mule.module.google;
 
-import org.mule.DefaultMuleMessage;
 import org.mule.api.MuleEvent;
-import org.mule.client.DefaultLocalMuleClient;
 import org.mule.construct.Flow;
 import org.mule.tck.AbstractMuleTestCase;
 import org.mule.tck.FunctionalTestCase;
@@ -31,7 +29,7 @@ import java.util.List;
 
 import org.junit.Test;
 
-public class GoogleContactsConnectorTest extends FunctionalTestCase
+public class GoogleContactsTest extends FunctionalTestCase
 {
     @Override
     protected String getConfigResources()

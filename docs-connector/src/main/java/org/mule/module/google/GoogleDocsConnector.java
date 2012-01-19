@@ -31,8 +31,9 @@ import org.mule.api.annotations.oauth.OAuthConsumerSecret;
 import org.mule.api.annotations.oauth.OAuthScope;
 import org.mule.api.annotations.param.Optional;
 
-import com.google.gdata.client.GoogleService;
+import com.google.gdata.client.authn.oauth.GoogleOAuthParameters;
 import com.google.gdata.client.authn.oauth.OAuthException;
+import com.google.gdata.client.authn.oauth.OAuthHmacSha1Signer;
 import com.google.gdata.client.docs.DocsService;
 import com.google.gdata.data.docs.DocumentListEntry;
 import com.google.gdata.data.docs.DocumentListFeed;
@@ -52,7 +53,7 @@ import java.util.List;
 @OAuth(accessTokenUrl="https://www.google.com/accounts/OAuthGetAccessToken",
        authorizationUrl="https://www.google.com/accounts/OAuthAuthorizeToken",
        requestTokenUrl="https://www.google.com/accounts/OAuthGetRequestToken")
-public class GoogleDocsConnector extends AbstractGoogleConnector
+public class GoogleDocsConnector
 {
 
     @Configurable
@@ -69,7 +70,27 @@ public class GoogleDocsConnector extends AbstractGoogleConnector
     private String scope = "https://docs.google.com/feeds/";
 
     private DocsService docsService = new DocsService("Mule-GoogleConnector/1.0");
+
+    private boolean tokenInitialized;
     
+    /**
+     * This is a hack until this gets fixed: https://github.com/mulesoft/mule-devkit/issues/64
+     * Technically this could result in multiple initialization, but that's rare and harmless
+     * since there is only ever one token per connector anyway. 
+     */
+    protected synchronized void initAccess(String accessToken, String accessTokenSecret) throws OAuthException {
+        if (tokenInitialized) {
+            return;
+        }
+        GoogleOAuthParameters oauthParameters = new GoogleOAuthParameters();
+        oauthParameters.setOAuthConsumerKey(getClientId());
+        oauthParameters.setOAuthConsumerSecret(getClientSecret());
+        oauthParameters.setOAuthToken(accessToken);
+        oauthParameters.setOAuthTokenSecret(accessTokenSecret);
+        docsService.setOAuthCredentials(oauthParameters, new OAuthHmacSha1Signer());
+        
+        tokenInitialized = true;
+    }
     @Processor
     public List<DocumentListEntry> listDocuments(@OAuthAccessToken String accessToken, @OAuthAccessTokenSecret String accessTokenSecret) 
         throws OAuthException, IOException, ServiceException {
@@ -79,11 +100,6 @@ public class GoogleDocsConnector extends AbstractGoogleConnector
         DocumentListFeed resultFeed = docsService.getFeed(feedUrl, DocumentListFeed.class);
         
         return resultFeed.getEntries();
-    }
-
-    @Override
-    protected GoogleService getGoogleService() {
-        return docsService;
     }
 
     public String getClientSecret() {

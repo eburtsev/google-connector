@@ -22,41 +22,41 @@
       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
       xmlns:spring="http://www.springframework.org/schema/beans"
       xmlns:context="http://www.springframework.org/schema/context"
-      xmlns:gcontacts="http://www.mulesoft.org/schema/mule/google-contacts"
+      xmlns:gdocs="http://www.mulesoft.org/schema/mule/google-docs"
       xsi:schemaLocation="
         http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-3.0.xsd
         http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-3.0.xsd
         http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
-        http://www.mulesoft.org/schema/mule/google-contacts http://www.mulesoft.org/schema/mule/google-contacts/1.0/mule-google-contacts.xsd">
+        http://www.mulesoft.org/schema/mule/google-docs http://www.mulesoft.org/schema/mule/google-docs/1.0/mule-google-docs.xsd">
 
     <context:property-placeholder location="test.properties" />
     
-    <gcontacts:config name="google-contacts" clientId="${client.id}" clientSecret="${client.secret}">
-        <gcontacts:oauth-callback-config domain="localhost" localPort="${http.port}" remotePort="${http.port}"/>
-        <gcontacts:oauth-save-access-token>
+    <gdocs:config name="google-docs" clientId="${client.id}" clientSecret="${client.secret}">
+        <gdocs:oauth-callback-config domain="localhost" localPort="${http.port}" remotePort="${http.port}"/>
+        <gdocs:oauth-save-access-token>
             <logger level="INFO" message="Received access token #[groovy:message]"/>
-        </gcontacts:oauth-save-access-token>
-        <gcontacts:oauth-restore-access-token>
+        </gdocs:oauth-save-access-token>
+        <gdocs:oauth-restore-access-token>
             <message-properties-transformer scope="invocation">
-                <add-message-property key="OAuthAccessToken" value="${docs.access.token}"/>
-                <add-message-property key="OAuthAccessTokenSecret" value="${docs.access.token.secret}"/>
+                <add-message-property key="OAuthAccessToken" value="${access.token}"/>
+                <add-message-property key="OAuthAccessTokenSecret" value="${access.token.secret}"/>
             </message-properties-transformer>
-        </gcontacts:oauth-restore-access-token>
-    </gcontacts:config>
+        </gdocs:oauth-restore-access-token>
+    </gdocs:config>
 
     <flow name="authorize">
         <inbound-endpoint address="http://localhost:${http.port}/authorize"/>
-        <gcontacts:authorize/>
+        <gdocs:authorize/>
     </flow>
         
     <flow name="authorizeVM">
         <inbound-endpoint address="vm://authorize" exchange-pattern="request-response"/>
-        <gcontacts:authorize/>
+        <gdocs:authorize/>
     </flow>
         
-    <flow name="get contacts">
-        <gcontacts:authorize/>
-        <gcontacts:get-contacts/>
+    <flow name="get docs">
+        <gdocs:authorize/>
+        <gdocs:list-documents/>
         <logger level="INFO" message="Hello #[payload]"/> 
     </flow>
 

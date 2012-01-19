@@ -1,38 +1,28 @@
+Google Connectors
+=================
 
-WELCOME
-=======
-Congratulations you have just created a new Mule Cloud Connector!
+1. Create your connector
+    
+    <gcontacts:config name="google-contacts" clientId="${client.id}" clientSecret="${client.secret}">
+        <gcontacts:oauth-callback-config domain="localhost" localPort="${http.port}" remotePort="${http.port}"/>
+    </gcontacts:config>
+    
+You can get your client ID and secret here:
+https://code.google.com/apis/console
 
-This wizard created a number of new classes and resources useful for Mule
-modules.  Each of the created files contains documentation and TODO
-items where necessary.  Here is an overview of what was created.
+2. You can then authorize your connector by creating a flow like this:
 
-./pom.xml:
-A maven project descriptor that describes how to build this module.
+    <flow name="authorize">
+        <inbound-endpoint address="http://localhost:${http.port}/authorize"/>
+        <gcontacts:authorize/>
+    </flow>
+    
+And browsing to the URL  http://localhost:${http.port}/authorize
 
-./LICENSE.md:
-The open source license text for this project.
+3. You can invoke your connector like so:
 
-TESTING
-=======
-
-This  project also contains test classes that can be run as part of a test
-suite.
-
-ADDITIONAL RESOURCES
-====================
-Everything you need to know about getting started with Mule can be found here:
-http://www.mulesoft.org/documentation/display/MULE3INTRO/Home
-
-There further useful information about extending Mule here:
-http://www.mulesoft.org/documentation/display/DEVKIT/Home
-
-Remember if you get stuck you can try getting help on the Mule user list:
-http://www.mulesoft.org/email-lists
-
-Also, MuleSoft, the company behind Mule, offers 24x7 support options:
-http://www.mulesoft.com/enterprise-subscriptions-and-support
-
-Enjoy your Mule ride!
-
-The Mule Team
+    <flow name="get contacts">
+        <gcontacts:get-contacts/>
+        <logger level="INFO" message="Contacts: #[payload]"/> 
+    </flow>
+    

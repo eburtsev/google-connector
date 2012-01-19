@@ -31,8 +31,9 @@ import org.mule.api.annotations.oauth.OAuthConsumerSecret;
 import org.mule.api.annotations.oauth.OAuthScope;
 import org.mule.api.annotations.param.Optional;
 
-import com.google.gdata.client.GoogleService;
+import com.google.gdata.client.authn.oauth.GoogleOAuthParameters;
 import com.google.gdata.client.authn.oauth.OAuthException;
+import com.google.gdata.client.authn.oauth.OAuthHmacSha1Signer;
 import com.google.gdata.client.contacts.ContactsService;
 import com.google.gdata.data.contacts.ContactEntry;
 import com.google.gdata.data.contacts.ContactFeed;
@@ -53,7 +54,7 @@ import java.util.List;
        authorizationUrl="https://www.google.com/accounts/OAuthAuthorizeToken",
        requestTokenUrl="https://www.google.com/accounts/OAuthGetRequestToken")
        
-public class GoogleContactsConnector extends AbstractGoogleConnector
+public class GoogleContactsConnector
 {
 
     @Configurable
@@ -70,6 +71,28 @@ public class GoogleContactsConnector extends AbstractGoogleConnector
     private String scope = "https://www.google.com/m8/feeds/";
 
     private ContactsService contactsService = new ContactsService("Mule-GoogleConnector/1.0");
+
+    private boolean tokenInitialized;
+    
+    /**
+     * This is a hack until this gets fixed: https://github.com/mulesoft/mule-devkit/issues/64
+     * Technically this could result in multiple initialization, but that's rare and harmless
+     * since there is only ever one token per connector anyway. 
+     */
+    protected synchronized void initAccess(String accessToken, String accessTokenSecret) throws OAuthException {
+        if (tokenInitialized) {
+            return;
+        }
+        
+        GoogleOAuthParameters oauthParameters = new GoogleOAuthParameters();
+        oauthParameters.setOAuthConsumerKey(getClientId());
+        oauthParameters.setOAuthConsumerSecret(getClientSecret());
+        oauthParameters.setOAuthToken(accessToken);
+        oauthParameters.setOAuthTokenSecret(accessTokenSecret);
+        contactsService.setOAuthCredentials(oauthParameters, new OAuthHmacSha1Signer());
+        
+        tokenInitialized = true;
+    }
     
     @Processor
     public List<ContactEntry> getContacts(@OAuthAccessToken String accessToken, @OAuthAccessTokenSecret String accessTokenSecret) 
@@ -80,11 +103,6 @@ public class GoogleContactsConnector extends AbstractGoogleConnector
         ContactFeed resultFeed = contactsService.getFeed(feedUrl, ContactFeed.class);
         
         return resultFeed.getEntries();
-    }
-
-    @Override
-    protected GoogleService getGoogleService() {
-        return contactsService;
     }
 
     public String getClientSecret() {

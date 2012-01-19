@@ -3,11 +3,16 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <groupId>org.mule.modules</groupId>
-    <artifactId>google-connector</artifactId>
+    <artifactId>google-connector-parent</artifactId>
     <version>1.0-SNAPSHOT</version>
-    <packaging>mule-module</packaging>
-    <name>Mule Cloud Connector</name>
+    <packaging>pom</packaging>
+    <name>Google Cloud Connectors</name>
 
+    <modules>
+        <module>docs-connector</module>
+        <module>contacts-connector</module>
+    </modules>
+    
     <properties>
         <mule.version>3.2.1</mule.version>
         <mule.devkit.version>3.3-SNAPSHOT</mule.devkit.version>
@@ -52,112 +57,10 @@
                 </plugin>
             </plugins>
         </pluginManagement>
-        <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <version>2.3.2</version>
-                <executions>
-                    <execution>
-                        <id>default-compile</id>
-                        <configuration>
-                            <compilerArgument>-proc:none</compilerArgument>
-                            <source>1.6</source>
-                            <target>1.6</target>
-                        </configuration>
-                    </execution>
-                    <execution>
-                        <id>default-testCompile</id>
-                        <configuration>
-                            <compilerArgument>-proc:none</compilerArgument>
-                            <source>1.6</source>
-                            <target>1.6</target>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <groupId>org.mule.tools.devkit</groupId>
-                <artifactId>mule-devkit-maven-plugin</artifactId>
-                </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-source-plugin</artifactId>
-                <version>2.1.2</version>
-                <executions>
-                    <execution>
-                        <id>attach-sources</id>
-                        <goals>
-                            <goal>jar</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-javadoc-plugin</artifactId>
-                <version>2.8</version>
-                <executions>
-                    <execution>
-                        <id>attach-javadocs</id>
-                        <goals>
-                            <goal>jar</goal>
-                        </goals>
-                    </execution>
-                </executions>
-                <configuration>
-                    <excludePackageNames>org.mule.tooling.ui.contribution:*</excludePackageNames>
-                    <docletArtifact>
-                        <groupId>org.mule.tools.devkit</groupId>
-                        <artifactId>mule-devkit-doclet</artifactId>
-                        <version>3.1.1-SNAPSHOT</version>
-                    </docletArtifact>
-                    <doclet>org.mule.devkit.doclet.Doclava</doclet>
-                    <bootclasspath>${sun.boot.class.path}</bootclasspath>
-                    <additionalparam>
-                        -quiet
-                        -federate JDK http://download.oracle.com/javase/6/docs/api/index.html?
-                        -federationxml JDK http://doclava.googlecode.com/svn/static/api/openjdk-6.xml
-                        -hdf project.artifactId "${project.artifactId}"
-                        -hdf project.groupId "${project.groupId}"
-                        -hdf project.version "${project.version}"
-                        -hdf project.name "${project.name}"
-                        -hdf project.repo.name "${project.distributionManagement.repository.name}"
-                        -hdf project.repo.id "${project.distributionManagement.repository.id}"
-                        -hdf project.repo.url "${project.distributionManagement.repository.url}"
-                        -hdf project.snapshotRepo.name "${project.distributionManagement.snapshotRepository.name}"
-                        -hdf project.snapshotRepo.id "${project.distributionManagement.snapshotRepository.id}"
-                        -hdf project.snapshotRepo.url "${project.distributionManagement.snapshotRepository.url}"
-                        -d ${project.build.directory}/apidocs
-                    </additionalparam>
-                    <useStandardDocletOptions>false</useStandardDocletOptions>
-                    <additionalJOption>-J-Xmx1024m</additionalJOption>
-                </configuration>
-            </plugin>
-        </plugins>
-        <resources>
-            <resource>
-                <filtering>false</filtering>
-                <directory>src/main/resources</directory>
-            </resource>
-            <resource>
-                <filtering>true</filtering>
-                <directory>src/test/resources</directory>
-            </resource>
-        </resources>
+        
     </build>
 
     <dependencies>
-         <dependency>
-            <groupId>com.google.gdata</groupId>
-            <artifactId>gdata-contacts-3.0</artifactId>
-            <version>1.41.5</version>
-        </dependency>
-         <dependency>
-            <groupId>com.google.gdata</groupId>
-            <artifactId>gdata-docs-3.0</artifactId>
-            <version>1.41.5</version>
-        </dependency>
          <dependency>
             <groupId>org.mule</groupId>
             <artifactId>mule-core</artifactId>

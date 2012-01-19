@@ -38,8 +38,8 @@
         </gcontacts:oauth-save-access-token>
         <gcontacts:oauth-restore-access-token>
             <message-properties-transformer scope="invocation">
-                <add-message-property key="OAuthAccessToken" value="${contacts.access.token}"/>
-                <add-message-property key="OAuthAccessTokenSecret" value="${contacts.access.token.secret}"/>
+                <add-message-property key="OAuthAccessToken" value="${access.token}"/>
+                <add-message-property key="OAuthAccessTokenSecret" value="${access.token.secret}"/>
             </message-properties-transformer>
         </gcontacts:oauth-restore-access-token>
     </gcontacts:config>

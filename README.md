@@ -3,26 +3,26 @@ Google Connectors
 
 1. Create your connector
     
-    <gcontacts:config name="google-contacts" clientId="${client.id}" clientSecret="${client.secret}">
-        <gcontacts:oauth-callback-config domain="localhost" localPort="${http.port}" remotePort="${http.port}"/>
-    </gcontacts:config>
+    &lt;gcontacts:config name="google-contacts" clientId="${client.id}" clientSecret="${client.secret}"&gt;
+        &lt;gcontacts:oauth-callback-config domain="localhost" localPort="${http.port}" remotePort="${http.port}"/&gt;
+    &lt;/gcontacts:config&gt;
     
 You can get your client ID and secret here:
 https://code.google.com/apis/console
 
 2. You can then authorize your connector by creating a flow like this:
 
-    <flow name="authorize">
-        <inbound-endpoint address="http://localhost:${http.port}/authorize"/>
-        <gcontacts:authorize/>
-    </flow>
+    &lt;flow name="authorize"&gt;
+        &lt;inbound-endpoint address="http://localhost:${http.port}/authorize"/&gt;
+        &lt;gcontacts:authorize/&gt;
+    &lt;/flow&gt;
     
 And browsing to the URL  http://localhost:${http.port}/authorize
 
 3. You can invoke your connector like so:
 
-    <flow name="get contacts">
-        <gcontacts:get-contacts/>
-        <logger level="INFO" message="Contacts: #[payload]"/> 
-    </flow>
+    &lt;flow name="get contacts"&gt;
+        &lt;gcontacts:get-contacts/&gt;
+        &lt;logger level="INFO" message="Contacts: #[payload]"/&gt; 
+    &lt;/flow&gt;
     

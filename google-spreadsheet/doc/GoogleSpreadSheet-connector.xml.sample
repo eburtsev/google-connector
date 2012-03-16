@@ -1,0 +1,3 @@
+<!-- BEGIN_INCLUDE(googlespreadsheet:my-processor) -->
+    <googlespreadsheet:my-processor content="#[map-payload:content]" />
+<!-- END_INCLUDE(googlespreadsheet:my-processor) -->

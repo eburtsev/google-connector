@@ -1,0 +1,2 @@
+http\://www.mulesoft.org/schema/mule/googlespreadsheet=org.mule.module.google.spreadsheet.config.spring.GoogleSpreadSheetModuleNamespaceHandler
+http\://www.mulesoft.org/schema/mule/googlespreadsheet=org.mule.module.google.spreadsheet.config.spring.GoogleSpreadSheetModuleNamespaceHandler

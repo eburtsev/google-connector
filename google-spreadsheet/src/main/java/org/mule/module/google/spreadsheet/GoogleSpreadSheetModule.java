@@ -20,9 +20,14 @@
  */
 package org.mule.module.google.spreadsheet;
 
+import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Pattern;
 
 import org.mule.api.annotations.Configurable;
 import org.mule.api.annotations.Module;
@@ -33,14 +38,36 @@ import org.mule.api.annotations.oauth.OAuthAccessTokenSecret;
 import org.mule.api.annotations.oauth.OAuthConsumerKey;
 import org.mule.api.annotations.oauth.OAuthConsumerSecret;
 import org.mule.api.annotations.oauth.OAuthScope;
+import org.mule.api.annotations.param.Default;
 import org.mule.api.annotations.param.Optional;
+import org.mule.api.annotations.param.Payload;
 
 import com.google.gdata.client.authn.oauth.GoogleOAuthParameters;
 import com.google.gdata.client.authn.oauth.OAuthException;
 import com.google.gdata.client.authn.oauth.OAuthHmacSha1Signer;
-import com.google.gdata.client.docs.DocsService;
-import com.google.gdata.data.docs.DocumentListEntry;
-import com.google.gdata.data.docs.DocumentListFeed;
+import com.google.gdata.client.spreadsheet.CellQuery;
+import com.google.gdata.client.spreadsheet.FeedURLFactory;
+import com.google.gdata.client.spreadsheet.ListQuery;
+import com.google.gdata.client.spreadsheet.SpreadsheetQuery;
+import com.google.gdata.client.spreadsheet.SpreadsheetService;
+import com.google.gdata.client.spreadsheet.WorksheetQuery;
+import com.google.gdata.data.Link;
+import com.google.gdata.data.Person;
+import com.google.gdata.data.batch.BatchOperationType;
+import com.google.gdata.data.batch.BatchUtils;
+import com.google.gdata.data.spreadsheet.Cell;
+import com.google.gdata.data.spreadsheet.CellEntry;
+import com.google.gdata.data.spreadsheet.CellFeed;
+import com.google.gdata.data.spreadsheet.Field;
+import com.google.gdata.data.spreadsheet.ListEntry;
+import com.google.gdata.data.spreadsheet.ListFeed;
+import com.google.gdata.data.spreadsheet.RecordEntry;
+import com.google.gdata.data.spreadsheet.SpreadsheetEntry;
+import com.google.gdata.data.spreadsheet.SpreadsheetFeed;
+import com.google.gdata.data.spreadsheet.TableEntry;
+import com.google.gdata.data.spreadsheet.TableFeed;
+import com.google.gdata.data.spreadsheet.WorksheetEntry;
+import com.google.gdata.data.spreadsheet.WorksheetFeed;
 import com.google.gdata.util.ServiceException;
 
 /**
@@ -78,28 +105,17 @@ public class GoogleSpreadSheetModule {
     @Optional
     private String scope = "https://docs.google.com/feeds/";
     
-    private DocsService docsService = null;
+    private FeedURLFactory factory = FeedURLFactory.getDefault();
     
-    private void connect(String accessToken, String secretToken) throws ServiceException {
-    	if (docsService == null) {
-    		GoogleOAuthParameters oauthParameters = new GoogleOAuthParameters();
-    		oauthParameters.setOAuthConsumerKey(this.consumerKey);
-    		oauthParameters.setOAuthConsumerSecret(this.consumerSecret);
-    		oauthParameters.setOAuthToken(accessToken);
-    		oauthParameters.setOAuthTokenSecret(secretToken);
-    		this.docsService = new DocsService("Mule-GoogleDocsConnector/1.0");
-    		
-    		try {
-    			docsService.setOAuthCredentials(oauthParameters, new OAuthHmacSha1Signer());
-    		} catch (OAuthException e) { 
-    			throw new ServiceException(e);
-    		}
-    	}
-    }
-
+    @Configurable
+    @Optional
+    private String applicationName = "Mule-GoogleDocsConnector/1.0";
+    
+    private SpreadsheetService service;
+    
     /**
      * 
-     * lists first 100 documents
+     * Retrieves the spreadsheets that the authenticated user has access to.
      *
      * {@sample.xml ../../../doc/GoogleDocs-connector.xml.sample googledocs:listDocuments}
      * 
@@ -110,15 +126,583 @@ public class GoogleSpreadSheetModule {
      * @throws ServiceException
      */
     @Processor
-    public List<DocumentListEntry> listDocuments(@OAuthAccessToken String accessToken, @OAuthAccessTokenSecret String secretToken)
-    			throws OAuthException, IOException, ServiceException {
+    public List<SpreadsheetEntry> getAllSpreadsheets(
+    		@OAuthAccessToken String accessToken,
+    		@OAuthAccessTokenSecret String secretToken) throws OAuthException, IOException, ServiceException {
     	
         this.connect(accessToken, secretToken);
-    	URL feedUrl = new URL("https://docs.google.com/feeds/default/private/full");
-        DocumentListFeed resultFeed = docsService.getFeed(feedUrl, DocumentListFeed.class);
-        return resultFeed.getEntries();
+        SpreadsheetFeed feed = service.getFeed(factory.getSpreadsheetsFeedUrl(), SpreadsheetFeed.class);
+        return feed.getEntries();
+    }
+    
+    @Processor
+    public List<Person> getAuthors(
+    		@OAuthAccessToken String accessToken,
+			@OAuthAccessTokenSecret String secretToken,
+    		String spreadsheet,
+    		@Optional @Default("0") int spreadsheetIndex) throws IOException, ServiceException {
+    	
+    	return this.getSpreadsheetEntry(accessToken, secretToken, spreadsheet, spreadsheetIndex).getAuthors();
+    }
+    
+    
+    /**
+     * Retrieves the columns headers from the cell feed of the worksheet
+     * entry.
+     *
+     * @param worksheet worksheet entry containing the cell feed in question
+     * @return a list of column headers
+     * @throws Exception if error in retrieving the spreadsheet information
+     */
+    @Processor
+    public List<String> getColumnHeaders(
+    		@OAuthAccessToken String accessToken,
+			@OAuthAccessTokenSecret String secretToken,
+    		String spreadsheet,
+    		String worksheet,
+    		@Optional @Default("0") int spreadsheetIndex,
+			@Optional @Default("0") int worksheetIndex) throws IOException, ServiceException {
+    	
+    	WorksheetEntry worksheetEntry = this.getWorksheetEntry(
+    						accessToken, secretToken, spreadsheet, worksheet, spreadsheetIndex, worksheetIndex);
+    	
+    	
+      List<String> headers = new ArrayList<String>();
+
+      // Get the appropriate URL for a cell feed
+      URL cellFeedUrl = worksheetEntry.getCellFeedUrl();
+
+      // Create a query for the top row of cells only (1-based)
+      CellQuery cellQuery = new CellQuery(cellFeedUrl);
+      cellQuery.setMaximumRow(1);
+
+      // Get the cell feed matching the query
+      CellFeed topRowCellFeed = this.service.query(cellQuery, CellFeed.class);
+
+      // Get the cell entries fromt he feed
+      for (CellEntry entry : topRowCellFeed.getEntries()) {
+        // Get the cell element from the entry
+        Cell cell = entry.getCell();
+        headers.add(cell.getValue());
+      }
+
+      return headers;
+    }
+    
+    
+    
+    /**
+     * Gets the SpreadsheetEntry for the first spreadsheet with that name
+     * retrieved in the feed.
+     *
+     * @param spreadsheet the name of the spreadsheet
+     * @return the first SpreadsheetEntry in the returned feed, so latest
+     * spreadsheet with the specified name
+     * @throws Exception if error is encountered, such as no spreadsheets with the
+     * name
+     */
+    @Processor
+    public List<SpreadsheetEntry> getSpreadsheet(
+    		@OAuthAccessToken String accessToken,
+    		@OAuthAccessTokenSecret String secretToken,
+    		String spreadsheet) throws IOException, ServiceException {
+      
+        this.connect(accessToken, secretToken);
+    	SpreadsheetQuery spreadsheetQuery = new SpreadsheetQuery(factory.getSpreadsheetsFeedUrl());
+        spreadsheetQuery.setTitleQuery(spreadsheet);
+        SpreadsheetFeed spreadsheetFeed = service.query(spreadsheetQuery, SpreadsheetFeed.class);
+        return spreadsheetFeed.getEntries();
     }
 
+    /**
+     * Get the WorksheetEntry for the worksheet in the spreadsheet with the
+     * specified name.
+     *
+     * @param spreadsheet the name of the spreadsheet
+     * @param worksheet the name of the worksheet in the spreadsheet
+     * @return worksheet with the specified name in the spreadsheet with the
+     * specified name
+     * @throws Exception if error is encountered, such as no spreadsheets with the
+     * name, or no worksheet wiht the name in the spreadsheet
+     */
+    @Processor
+    public List<WorksheetEntry> getWorksheet(
+    							@OAuthAccessToken String accessToken,
+    							@OAuthAccessTokenSecret String secretToken,
+    							String spreadsheet,
+    							String worksheet,
+    							@Optional @Default("0") int spreadsheetIndex)
+    							throws IOException, ServiceException {
+    	
+    	this.connect(accessToken, secretToken);
+
+    	SpreadsheetEntry spreadsheetEntry = this.getSpreadsheetEntry(accessToken, secretToken, spreadsheet, spreadsheetIndex);
+    	
+    	WorksheetQuery worksheetQuery = new WorksheetQuery(spreadsheetEntry.getWorksheetFeedUrl());
+    	worksheetQuery.setTitleQuery(worksheet);
+    	WorksheetFeed worksheetFeed = service.query(worksheetQuery, WorksheetFeed.class);
+      
+    	return worksheetFeed.getEntries();
+    }
+
+    /**
+     * Clears all the cell entries in the worksheet.
+     *
+     * @param spreadsheet the name of the spreadsheet
+     * @param worksheet the name of the worksheet
+     * @throws Exception if error is encountered, such as bad permissions
+     */
+    @Processor
+    public void purgeWorksheet(
+    		@OAuthAccessToken String accessToken,
+			@OAuthAccessTokenSecret String secretToken,
+    		String spreadsheet,
+    		String worksheet,
+    		@Optional @Default("0") int spreadsheetIndex,
+			@Optional @Default("0") int worksheetIndex)
+			throws IOException, ServiceException {
+    	
+    	WorksheetEntry worksheetEntry = this.getWorksheetEntry(accessToken, secretToken, spreadsheet, worksheet, spreadsheetIndex, worksheetIndex);
+    	
+    	CellFeed cellFeed = service.getFeed(worksheetEntry.getCellFeedUrl(), CellFeed.class);
+
+    	for (CellEntry cell : cellFeed.getEntries()) {
+    		Link editLink = cell.getEditLink();
+    		service.delete(new URL(editLink.getHref()));
+    	}
+    }
+    
+    /**
+     * Inserts or overwrites a cell in the worksheet.
+     *
+     * @param spreadsheet the name of the spreadsheet
+     * @param worksheet the name of the worksheet
+     * @param row the index of the row
+     * @param column the index of the column
+     * @param formulaOrValue the input string for the cell
+     * @throws Exception if error is encountered, such as bad permissions
+     */
+    @Processor
+    public void insertCell(
+    		@OAuthAccessToken String accessToken,
+			@OAuthAccessTokenSecret String secretToken,
+    		String spreadsheet,
+    		String worksheet,
+    		int row,
+    		int column,
+    		String formulaOrValue,
+    		@Optional @Default("0") int spreadsheetIndex,
+			@Optional @Default("0") int worksheetIndex) throws IOException, ServiceException {
+      
+      URL cellFeedUrl = this.getWorksheetEntry(accessToken, secretToken, spreadsheet, worksheet, spreadsheetIndex, worksheetIndex).getCellFeedUrl();
+
+      CellEntry newEntry = new CellEntry(row, column, formulaOrValue);
+      this.service.insert(cellFeedUrl, newEntry);
+    }
+    
+    /**
+     * Shows all cells that are in the spreadsheet.
+     * 
+     * @throws ServiceException when the request causes an error in the Google
+     *         Spreadsheets service.
+     * @throws IOException when an error occurs in communication with the Google
+     *         Spreadsheets service.
+     */
+    @Processor
+    public List<CellEntry> getAllCells(
+    		@OAuthAccessToken String accessToken,
+			@OAuthAccessTokenSecret String secretToken,
+    		String spreadsheet,
+    		String worksheet,
+    		@Optional @Default("0") int spreadsheetIndex,
+			@Optional @Default("0") int worksheetIndex) throws IOException, ServiceException {
+    	
+    	WorksheetEntry worksheetEntry = this.getWorksheetEntry(
+				accessToken, secretToken, spreadsheet, worksheet, spreadsheetIndex, worksheetIndex);
+
+    	// Get the appropriate URL for a cell feed
+    	URL cellFeedUrl = worksheetEntry.getCellFeedUrl();
+    	return this.service.getFeed(cellFeedUrl, CellFeed.class).getEntries();
+    }
+    
+    /**
+     * Shows a particular range of cells, limited by minimum/maximum rows and
+     * columns.
+     * 
+     * @param minRow the minimum row, inclusive, 1-based
+     * @param maxRow the maximum row, inclusive, 1-based
+     * @param minCol the minimum column, inclusive, 1-based
+     * @param maxCol the maximum column, inclusive, 1-based
+     * @throws ServiceException when the request causes an error in the Google
+     *         Spreadsheets service.
+     * @throws IOException when an error occurs in communication with the Google
+     *         Spreadsheets service.
+     */
+    public List<CellEntry> getCellRange(
+    		@OAuthAccessToken String accessToken,
+			@OAuthAccessTokenSecret String secretToken,
+    		String spreadsheet,
+    		String worksheet,
+    		@Optional @Default("0") int spreadsheetIndex,
+			@Optional @Default("0") int worksheetIndex,
+    		int minRow,
+    		int maxRow,
+    		int minCol,
+    		int maxCol) throws IOException, ServiceException {
+      
+    	CellQuery query = new CellQuery(this.getCellFeedUrl(accessToken, secretToken, spreadsheet, worksheet, spreadsheetIndex, worksheetIndex));
+    	query.setMinimumRow(minRow);
+	    query.setMaximumRow(maxRow);
+	    query.setMinimumCol(minCol);
+	    query.setMaximumCol(maxCol);
+	    return service.query(query, CellFeed.class).getEntries();
+    }
+    
+    /**
+     * Performs a full-text search on cells.
+     * 
+     * @param fullTextSearchString a full text search string, with space-separated
+     *        keywords
+     * @throws ServiceException when the request causes an error in the Google
+     *         Spreadsheets service.
+     * @throws IOException when an error occurs in communication with the Google
+     *         Spreadsheets service.
+     */
+    public List<CellEntry> search(
+    		@OAuthAccessToken String accessToken,
+			@OAuthAccessTokenSecret String secretToken,
+    		String spreadsheet,
+    		String worksheet,
+    		@Optional @Default("0") int spreadsheetIndex,
+			@Optional @Default("0") int worksheetIndex,
+    		String searchString) throws IOException, ServiceException {
+    	
+      CellQuery query = new CellQuery(this.getCellFeedUrl(accessToken, secretToken, spreadsheet, worksheet, spreadsheetIndex, worksheetIndex));
+      query.setFullTextQuery(searchString);
+      
+      return service.query(query, CellFeed.class).getEntries();
+    }
+    
+    /**
+     * Performs a full database-like query on the rows.
+     * 
+     * @param accessToken
+     * @param secretToken
+     * @param spreadsheet
+     * @param worksheet
+     * @param spreadsheetIndex
+     * @param worksheetIndex
+     * @param query a query like: name = "Bob" and phone != "555-1212"
+     * @return
+     * @throws IOException
+     * @throws ServiceException
+     */
+    @Processor
+    public List<ListEntry> structuredQuery(
+    		@OAuthAccessToken String accessToken,
+			@OAuthAccessTokenSecret String secretToken,
+    		String spreadsheet,
+    		String worksheet,
+    		@Optional @Default("0") int spreadsheetIndex,
+			@Optional @Default("0") int worksheetIndex,
+    		String query) throws IOException, ServiceException {
+    	
+    	WorksheetEntry ws = this.getWorksheetEntry(accessToken, secretToken, spreadsheet, worksheet, spreadsheetIndex, worksheetIndex);
+    	
+    	ListQuery listQuery = new ListQuery(ws.getListFeedUrl());
+    	listQuery.setSpreadsheetQuery(query);
+        return service.query(listQuery, ListFeed.class).getEntries();
+    }
+    
+    /**
+     * Adds a new list entry, based on the user-specified name value pairs.
+     * 
+     * @param nameValuePairs pairs such as "name=Rosa,phone=555-1212"
+     * @throws ServiceException when the request causes an error in the Google
+     *         Spreadsheets service.
+     * @throws IOException when an error occurs in communication with the Google
+     *         Spreadsheets service.
+     */
+    @Processor
+    public void insertListEntry(
+    		@OAuthAccessToken String accessToken,
+			@OAuthAccessTokenSecret String secretToken,
+    		String spreadsheet,
+    		String worksheet,
+    		@Optional @Default("0") int spreadsheetIndex,
+			@Optional @Default("0") int worksheetIndex,
+    		String nameValuePairs) throws IOException, ServiceException {
+      
+    	ListEntry newEntry = this.setEntries(new ListEntry(), nameValuePairs);
+    	service.insert(this.getListFeedURL(accessToken, secretToken, spreadsheet, worksheet, spreadsheetIndex, worksheetIndex), newEntry);
+    }
+
+    /**
+     * 
+     * @param accessToken
+     * @param secretToken
+     * @param spreadsheet
+     * @param worksheet
+     * @param spreadsheetIndex
+     * @param worksheetIndex
+     * @return
+     * @throws IOException
+     * @throws ServiceException
+     */
+    @Processor
+    public List<ListEntry> getAllListEntries(
+    		@OAuthAccessToken String accessToken,
+			@OAuthAccessTokenSecret String secretToken,
+    		String spreadsheet,
+    		String worksheet,
+    		@Optional @Default("0") int spreadsheetIndex,
+			@Optional @Default("0") int worksheetIndex) throws IOException, ServiceException {
+    	
+    	return service.getFeed(this.getListFeedURL(accessToken, secretToken, spreadsheet, worksheet, spreadsheetIndex, worksheetIndex), ListFeed.class).getEntries();
+    }
+    
+    /**
+     * Lists the tables currently available in the sheet.
+     * 
+     * @param accessToken
+     * @param secretToken
+     * @param spreadsheet
+     * @param spreadsheetIndex
+     * @return
+     * @throws IOException
+     * @throws ServiceException
+     */
+    @Processor
+    public List<TableEntry> getAllTables(
+    		@OAuthAccessToken String accessToken,
+			@OAuthAccessTokenSecret String secretToken,
+    		String spreadsheet,
+    		@Optional @Default("0") int spreadsheetIndex) throws IOException, ServiceException {
+    	
+    	return service.getFeed(this.getRecordFeedURL(accessToken, secretToken, spreadsheet, spreadsheetIndex), TableFeed.class).getEntries();
+    }
+    
+    /**
+     * Adds a new record entry, based on the user-specified name value pairs.
+     * 
+     * @param accessToken
+     * @param secretToken
+     * @param spreadsheet
+     * @param spreadsheetIndex
+     * @param nameValuePairs pairs such as "name=Rosa,phone=555-1212"
+     * @throws IOException
+     * @throws ServiceException
+     */
+    @Processor
+    public void insertTableEntry(
+    		@OAuthAccessToken String accessToken,
+			@OAuthAccessTokenSecret String secretToken,
+    		String spreadsheet,
+    		@Optional @Default("0") int spreadsheetIndex,
+    		String nameValuePairs) throws IOException, ServiceException {
+
+        this.service.insert(this.getRecordFeedURL(accessToken, secretToken, spreadsheet, spreadsheetIndex), this.setEntries(new RecordEntry(), nameValuePairs));
+    }
+    
+    /**
+     * Returns a CellEntry with batch id and operation type that will tell the
+     * server to update the specified cell with the given value. The entry is
+     * fetched from the server in order to get the current edit link (for
+     * optimistic concurrency).
+     * 
+     * @param row the row number of the cell to operate on
+     * @param col the column number of the cell to operate on
+     * @param value the value to set in case of an update the cell to operate on
+     * 
+     * @throws ServiceException when the request causes an error in the Google
+     *         Spreadsheets service.
+     * @throws IOException when an error occurs in communication with the Google
+     *         Spreadsheets service.
+     */
+    private CellEntry createUpdateOperation(URL cellFeedUrl, int row, int col, String value) throws ServiceException, IOException {
+      String batchId = "R" + row + "C" + col;
+      URL entryUrl = new URL(cellFeedUrl.toString() + "/" + batchId);
+      CellEntry entry = service.getEntry(entryUrl, CellEntry.class);
+      entry.changeInputValueLocal(value);
+      BatchUtils.setBatchId(entry, batchId);
+      BatchUtils.setBatchOperationType(entry, BatchOperationType.UPDATE);
+
+      return entry;
+    }
+    
+//    public void batchCellRequest(
+//    		NestedProcessor nested) {
+//    	
+//    	nested.p
+//    	
+//    	nested.process()
+//    }
+    
+    
+
+    
+    /**
+     * Main entry point. Parses arguments and creates and invokes the
+     * ImportClient.
+     */
+    @Processor
+    public void importDelimited(
+    		@OAuthAccessToken String accessToken,
+			@OAuthAccessTokenSecret String secretToken,
+    		String spreadsheet,
+    		String worksheet,
+    		@Payload String content,
+    		String delimiter,
+    		@Optional @Default("false") boolean purge,
+    		@Optional @Default("0") int spreadsheetIndex,
+    		@Optional @Default("0") int worksheetIndex) throws IOException, ServiceException {
+
+    	this.connect(accessToken, secretToken);
+    	
+    	if (purge) {
+    		this.purgeWorksheet(accessToken, secretToken, spreadsheet, worksheet, spreadsheetIndex, worksheetIndex);
+    	}
+
+    	Pattern delim = Pattern.compile(delimiter);
+     
+    	BufferedReader reader = null;
+    	try {
+    		reader = new BufferedReader(new InputStreamReader(new ByteArrayInputStream(content.getBytes())));
+    		String line = reader.readLine();
+    		int row = 0;
+        
+    		while (line != null) {
+        
+    			// Break up the line by the delimiter and insert the cells
+    			String[] cells = delim.split(line, -1);  
+    			for (int col = 0; col < cells.length; col++) {
+    				this.insertCell(accessToken, secretToken, spreadsheet, worksheet, row + 1, col + 1, cells[col], spreadsheetIndex, worksheetIndex);
+    			}
+        
+    			// Advance the loop
+    			line = reader.readLine();
+    			row++;
+    		}
+    	} finally {
+    	  
+    		if (reader != null) {
+    		  reader.close();
+    	  }
+      }
+      
+    }
+    
+    private SpreadsheetEntry getSpreadsheetEntry(
+    		String accessToken,
+			String secretToken,
+    		String spreadsheet,
+    		int spreadsheetIndex) throws IOException, ServiceException {
+    	return this.getItem(this.getSpreadsheet(accessToken, secretToken, spreadsheet), spreadsheetIndex);
+    }
+    
+    private URL getRecordFeedURL(
+    		String accessToken,
+			String secretToken,
+    		String spreadsheet,
+			int spreadsheetIndex) throws IOException, ServiceException {
+    	
+    	SpreadsheetEntry ss = this.getSpreadsheetEntry(accessToken, secretToken, spreadsheet, spreadsheetIndex);
+    	URL spreadsheetUrl = new java.net.URL(ss.getSpreadsheetLink().getHref());
+    	return new java.net.URL(spreadsheetUrl.getProtocol() + "://" + spreadsheetUrl.getHost() + "/feeds/"
+    							+ ss.getKey() + "/tables");
+    }
+    
+    private URL getListFeedURL(
+    		String accessToken,
+			String secretToken,
+    		String spreadsheet,
+    		String worksheet,
+			int spreadsheetIndex,
+    		int worksheetIndex) throws IOException, ServiceException {
+    	
+    	return this.getWorksheetEntry(accessToken, secretToken, spreadsheet, worksheet, spreadsheetIndex, worksheetIndex).getListFeedUrl();
+    }
+    
+    private WorksheetEntry getWorksheetEntry(
+    		String accessToken,
+			String secretToken,
+    		String spreadsheet,
+    		String worksheet,
+			int spreadsheetIndex,
+    		int worksheetIndex) throws IOException, ServiceException {
+    	
+    	List<WorksheetEntry> worksheets = this.getWorksheet(accessToken, secretToken, spreadsheet, worksheet, spreadsheetIndex);
+    	return this.getItem(worksheets, worksheetIndex);
+    }
+    
+    private URL getCellFeedUrl(String accessToken,
+			String secretToken,
+    		String spreadsheet,
+    		String worksheet,
+			int spreadsheetIndex,
+    		int worksheetIndex) throws IOException, ServiceException {
+    	
+    	return this.getWorksheetEntry(accessToken, secretToken, spreadsheet, worksheet, spreadsheetIndex, worksheetIndex).getCellFeedUrl();
+    }
+    
+    private <T> T getItem(List<T> list, int index) {
+    	if (list.isEmpty()) {
+    		throw new IllegalArgumentException("No item found for that name");
+    	} else if (index >= list.size()) {
+    		throw new IllegalArgumentException("You requested item index " + index + 
+    											" but only " + list.size() + " were found");
+    	}
+    	
+    	return list.get(index);
+    }
+    
+    private void connect(String accessToken, String secretToken) throws ServiceException {
+    	if (service == null) {
+    		GoogleOAuthParameters oauthParameters = new GoogleOAuthParameters();
+    		oauthParameters.setOAuthConsumerKey(this.consumerKey);
+    		oauthParameters.setOAuthConsumerSecret(this.consumerSecret);
+    		oauthParameters.setOAuthToken(accessToken);
+    		oauthParameters.setOAuthTokenSecret(secretToken);
+    		this.service = new SpreadsheetService(this.applicationName);
+    		
+    		try {
+    			service.setOAuthCredentials(oauthParameters, new OAuthHmacSha1Signer());
+    		} catch (OAuthException e) { 
+    			throw new ServiceException(e);
+    		}
+    	}
+    }
+    
+    private ListEntry setEntries(ListEntry entryToChange, String nameValuePairs) {
+    	// Split first by the commas between the different fields.
+        for (String nameValuePair : nameValuePairs.split(",")) {
+
+          // Then, split by the equal sign.
+          String[] parts = nameValuePair.split("=", 2);
+          String tag = parts[0]; // such as "name"
+          String value = parts[1]; // such as "Fred"
+
+          entryToChange.getCustomElements().setValueLocal(tag, value);
+        }
+        
+        return entryToChange;
+    }
+    
+    public RecordEntry setEntries(RecordEntry entryToChange, String nameValuePairs) {
+	    // Split first by the commas between the different fields.
+	    for (String nameValuePair : nameValuePairs.split(",")) {
+
+	      // Then, split by the equal sign.
+	      String[] parts = nameValuePair.split("=", 2);
+	      String name = parts[0]; // such as "name"
+	      String value = parts[1]; // such as "Fred"
+
+	      entryToChange.addField(new Field(null, name, value));
+	    }
+	    
+	    return entryToChange;
+    }
+    
 	public String getConsumerKey() {
 		return consumerKey;
 	}
@@ -133,14 +717,6 @@ public class GoogleSpreadSheetModule {
 
 	public void setConsumerSecret(String consumerSecret) {
 		this.consumerSecret = consumerSecret;
-	}
-
-	public DocsService getDocsService() {
-		return docsService;
-	}
-
-	public void setDocsService(DocsService docsService) {
-		this.docsService = docsService;
 	}
 
 	public String getScope() {

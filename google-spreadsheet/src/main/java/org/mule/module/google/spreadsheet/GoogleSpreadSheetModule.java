@@ -29,6 +29,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
 
+import org.mule.RequestContext;
+import org.mule.api.MuleMessage;
+import org.mule.api.NestedProcessor;
 import org.mule.api.annotations.Configurable;
 import org.mule.api.annotations.Module;
 import org.mule.api.annotations.Processor;
@@ -42,9 +45,11 @@ import org.mule.api.annotations.param.Default;
 import org.mule.api.annotations.param.Optional;
 import org.mule.api.annotations.param.Payload;
 
+import com.google.gdata.client.GoogleService;
 import com.google.gdata.client.authn.oauth.GoogleOAuthParameters;
 import com.google.gdata.client.authn.oauth.OAuthException;
 import com.google.gdata.client.authn.oauth.OAuthHmacSha1Signer;
+import com.google.gdata.client.docs.DocsService;
 import com.google.gdata.client.spreadsheet.CellQuery;
 import com.google.gdata.client.spreadsheet.FeedURLFactory;
 import com.google.gdata.client.spreadsheet.ListQuery;
@@ -53,6 +58,7 @@ import com.google.gdata.client.spreadsheet.SpreadsheetService;
 import com.google.gdata.client.spreadsheet.WorksheetQuery;
 import com.google.gdata.data.Link;
 import com.google.gdata.data.Person;
+import com.google.gdata.data.PlainTextConstruct;
 import com.google.gdata.data.batch.BatchOperationType;
 import com.google.gdata.data.batch.BatchUtils;
 import com.google.gdata.data.spreadsheet.Cell;
@@ -86,6 +92,9 @@ import com.google.gdata.util.ServiceException;
 		callbackPath="oauth2callback")
 public class GoogleSpreadSheetModule {
 	
+	private static final String BATCH_REQUEST = "BATCH_REQUEST";
+	private static final String CELL_FEED_URL = "CELL_FEED_URL";
+	
 	/**
      * The OAuth consumer key 
      */
@@ -103,7 +112,7 @@ public class GoogleSpreadSheetModule {
     @OAuthScope
     @Configurable
     @Optional
-    private String scope = "https://docs.google.com/feeds/";
+    private String scope = "https://docs.google.com/feeds/private/full https://spreadsheets.google.com/feeds http://spreadsheets.google.com/feeds";
     
     private FeedURLFactory factory = FeedURLFactory.getDefault();
     
@@ -111,7 +120,9 @@ public class GoogleSpreadSheetModule {
     @Optional
     private String applicationName = "Mule-GoogleDocsConnector/1.0";
     
-    private SpreadsheetService service;
+    private SpreadsheetService ssService;
+    
+    private DocsService docService;
     
     /**
      * 
@@ -130,9 +141,153 @@ public class GoogleSpreadSheetModule {
     		@OAuthAccessToken String accessToken,
     		@OAuthAccessTokenSecret String secretToken) throws OAuthException, IOException, ServiceException {
     	
-        this.connect(accessToken, secretToken);
-        SpreadsheetFeed feed = service.getFeed(factory.getSpreadsheetsFeedUrl(), SpreadsheetFeed.class);
+        this.connectSS(accessToken, secretToken);
+        SpreadsheetFeed feed = ssService.getFeed(factory.getSpreadsheetsFeedUrl(), SpreadsheetFeed.class);
         return feed.getEntries();
+    }
+    
+    /**
+     * 
+     * @param accessToken
+     * @param secretToken
+     * @param title
+     * @throws OAuthException
+     * @throws IOException
+     * @throws ServiceException
+     */
+    @Processor
+    public void createSpreadsheet(
+    		@OAuthAccessToken String accessToken,
+    		@OAuthAccessTokenSecret String secretToken,
+    		String title) throws OAuthException, IOException, ServiceException {
+
+//    	SpreadsheetEntry ss = new SpreadsheetEntry();
+//    	ss.setTitle(new PlainTextConstruct(title));
+//    	this.ssService.insert(this.factory.getSpreadsheetsFeedUrl(), ss);
+    	
+    	this.connectDocs(accessToken, secretToken);
+    	com.google.gdata.data.docs.SpreadsheetEntry newEntry = new com.google.gdata.data.docs.SpreadsheetEntry();
+        newEntry.setTitle(new PlainTextConstruct(title));
+        this.docService.insert(new URL("https://docs.google.com/feeds/default/private/full"), newEntry);
+    }
+    
+    /**
+     * Lists all the worksheets in the loaded spreadsheet.
+     * 
+     * @throws ServiceException when the request causes an error in the Google
+     *         Spreadsheets service.
+     * @throws IOException when an error occurs in communication with the Google
+     *         Spreadsheets service.
+     */
+    @Processor
+    public List<WorksheetEntry> getAllWorksheets(
+    		@OAuthAccessToken String accessToken,
+			@OAuthAccessTokenSecret String secretToken,
+    		String spreadsheet,
+    		@Optional @Default("0") int spreadsheetIndex) throws IOException, ServiceException {
+    	
+    	SpreadsheetEntry ss = this.getSpreadsheetEntry(accessToken, secretToken, spreadsheet, spreadsheetIndex);
+    	return ssService.getFeed(ss.getWorksheetFeedUrl(), WorksheetFeed.class).getEntries();
+    }
+    
+    /**
+     * Creates a new worksheet in the loaded spreadsheets, using the title and
+     * sizes given.
+     * 
+     * @param title a String containing a name for the new worksheet.
+     * @param rowCount the number of rows the new worksheet should have.
+     * @param colCount the number of columns the new worksheet should have.
+     * 
+     * @throws ServiceException when the request causes an error in the Google
+     *         Spreadsheets service.
+     * @throws IOException when an error occurs in communication with the Google
+     *         Spreadsheets service.
+     */
+    @Processor
+    public void createWorksheet(
+    		@OAuthAccessToken String accessToken,
+			@OAuthAccessTokenSecret String secretToken,
+    		String spreadsheet,
+    		@Optional @Default("0") int spreadsheetIndex,
+    		String title,
+    		int rowCount,
+    		int colCount) throws IOException, ServiceException {
+    	
+    	SpreadsheetEntry ss = this.getSpreadsheetEntry(accessToken, secretToken, spreadsheet, spreadsheetIndex);
+    	WorksheetEntry worksheet = new WorksheetEntry();
+    	worksheet.setTitle(new PlainTextConstruct(title));
+    	worksheet.setRowCount(rowCount);
+    	worksheet.setColCount(colCount);
+    	ssService.insert(ss.getWorksheetFeedUrl(), worksheet);
+    }
+    
+    /**
+     * Updates the worksheet specified by the oldTitle parameter, with the given
+     * title and sizes. Note that worksheet titles are not unique, so this method
+     * just updates the first worksheet it finds. Hey, it's just sample code - no
+     * refunds!
+     * 
+     * @param oldTitle a String specifying the worksheet to update.
+     * @param newTitle a String containing the new name for the worksheet.
+     * @param rowCount the number of rows the new worksheet should have.
+     * @param colCount the number of columns the new worksheet should have.
+     * 
+     * @throws ServiceException when the request causes an error in the Google
+     *         Spreadsheets service.
+     * @throws IOException when an error occurs in communication with the Google
+     *         Spreadsheets service.
+     */
+    @Processor
+    public void updateWorksheet(
+    		@OAuthAccessToken String accessToken,
+			@OAuthAccessTokenSecret String secretToken,
+    		String spreadsheet,
+    		String worksheet,
+    		@Optional String title,
+    		@Optional @Default("0") int rowCount,
+    		@Optional @Default("0") int colCount,
+    		@Optional @Default("0") int spreadsheetIndex,
+			@Optional @Default("0") int worksheetIndex) throws IOException, ServiceException {
+    	
+    	WorksheetEntry ws = this.getWorksheetEntry(accessToken, secretToken, spreadsheet, worksheet, spreadsheetIndex, worksheetIndex);
+    	
+    	if (title != null) {
+    		ws.setTitle(new PlainTextConstruct(title));
+    	}
+    	
+    	if (rowCount > 0) {
+    		ws.setRowCount(rowCount);
+    	}
+    	
+    	if (colCount > 0) {
+    		ws.setColCount(colCount);
+    	}
+    	
+    	ws.update();
+    }
+    
+    /**
+     * Deletes the worksheet specified by the title parameter. Note that worksheet
+     * titles are not unique, so this method just updates the first worksheet it
+     * finds.
+     * 
+     * @param title a String containing the name of the worksheet to delete.
+     * 
+     * @throws ServiceException when the request causes an error in the Google
+     *         Spreadsheets service.
+     * @throws IOException when an error occurs in communication with the Google
+     *         Spreadsheets service.
+     */
+    @Processor
+    public void deleteWorksheet(
+    		@OAuthAccessToken String accessToken,
+			@OAuthAccessTokenSecret String secretToken,
+    		String spreadsheet,
+    		String worksheet,
+    		@Optional @Default("0") int spreadsheetIndex,
+			@Optional @Default("0") int worksheetIndex) throws IOException, ServiceException {
+    	
+    	this.getWorksheetEntry(accessToken, secretToken, spreadsheet, worksheet, spreadsheetIndex, worksheetIndex).delete();
     }
     
     @Processor
@@ -177,7 +332,7 @@ public class GoogleSpreadSheetModule {
       cellQuery.setMaximumRow(1);
 
       // Get the cell feed matching the query
-      CellFeed topRowCellFeed = this.service.query(cellQuery, CellFeed.class);
+      CellFeed topRowCellFeed = this.ssService.query(cellQuery, CellFeed.class);
 
       // Get the cell entries fromt he feed
       for (CellEntry entry : topRowCellFeed.getEntries()) {
@@ -188,8 +343,6 @@ public class GoogleSpreadSheetModule {
 
       return headers;
     }
-    
-    
     
     /**
      * Gets the SpreadsheetEntry for the first spreadsheet with that name
@@ -207,10 +360,10 @@ public class GoogleSpreadSheetModule {
     		@OAuthAccessTokenSecret String secretToken,
     		String spreadsheet) throws IOException, ServiceException {
       
-        this.connect(accessToken, secretToken);
+        this.connectSS(accessToken, secretToken);
     	SpreadsheetQuery spreadsheetQuery = new SpreadsheetQuery(factory.getSpreadsheetsFeedUrl());
         spreadsheetQuery.setTitleQuery(spreadsheet);
-        SpreadsheetFeed spreadsheetFeed = service.query(spreadsheetQuery, SpreadsheetFeed.class);
+        SpreadsheetFeed spreadsheetFeed = ssService.query(spreadsheetQuery, SpreadsheetFeed.class);
         return spreadsheetFeed.getEntries();
     }
 
@@ -234,13 +387,13 @@ public class GoogleSpreadSheetModule {
     							@Optional @Default("0") int spreadsheetIndex)
     							throws IOException, ServiceException {
     	
-    	this.connect(accessToken, secretToken);
+    	this.connectSS(accessToken, secretToken);
 
     	SpreadsheetEntry spreadsheetEntry = this.getSpreadsheetEntry(accessToken, secretToken, spreadsheet, spreadsheetIndex);
     	
     	WorksheetQuery worksheetQuery = new WorksheetQuery(spreadsheetEntry.getWorksheetFeedUrl());
     	worksheetQuery.setTitleQuery(worksheet);
-    	WorksheetFeed worksheetFeed = service.query(worksheetQuery, WorksheetFeed.class);
+    	WorksheetFeed worksheetFeed = ssService.query(worksheetQuery, WorksheetFeed.class);
       
     	return worksheetFeed.getEntries();
     }
@@ -264,11 +417,11 @@ public class GoogleSpreadSheetModule {
     	
     	WorksheetEntry worksheetEntry = this.getWorksheetEntry(accessToken, secretToken, spreadsheet, worksheet, spreadsheetIndex, worksheetIndex);
     	
-    	CellFeed cellFeed = service.getFeed(worksheetEntry.getCellFeedUrl(), CellFeed.class);
+    	CellFeed cellFeed = ssService.getFeed(worksheetEntry.getCellFeedUrl(), CellFeed.class);
 
     	for (CellEntry cell : cellFeed.getEntries()) {
     		Link editLink = cell.getEditLink();
-    		service.delete(new URL(editLink.getHref()));
+    		ssService.delete(new URL(editLink.getHref()));
     	}
     }
     
@@ -283,7 +436,7 @@ public class GoogleSpreadSheetModule {
      * @throws Exception if error is encountered, such as bad permissions
      */
     @Processor
-    public void insertCell(
+    public void setCellValue(
     		@OAuthAccessToken String accessToken,
 			@OAuthAccessTokenSecret String secretToken,
     		String spreadsheet,
@@ -294,10 +447,79 @@ public class GoogleSpreadSheetModule {
     		@Optional @Default("0") int spreadsheetIndex,
 			@Optional @Default("0") int worksheetIndex) throws IOException, ServiceException {
       
-      URL cellFeedUrl = this.getWorksheetEntry(accessToken, secretToken, spreadsheet, worksheet, spreadsheetIndex, worksheetIndex).getCellFeedUrl();
+    	URL cellFeedUrl = this.getWorksheetEntry(accessToken, secretToken, spreadsheet, worksheet, spreadsheetIndex, worksheetIndex).getCellFeedUrl();
 
-      CellEntry newEntry = new CellEntry(row, column, formulaOrValue);
-      this.service.insert(cellFeedUrl, newEntry);
+    	CellEntry newEntry = new CellEntry(row, column, formulaOrValue);
+    	this.ssService.insert(cellFeedUrl, newEntry);
+    }
+    
+    /**
+     * 
+     * 
+     * @param accessToken
+     * @param secretToken
+     * @param spreadsheet
+     * @param worksheet
+     * @param nestedProcessors
+     * @param spreadsheetIndex
+     * @param worksheetIndex
+     * @return
+     * @throws Exception
+     */
+    @Processor
+    public List<CellEntry> batchSetCellValue(
+    		@OAuthAccessToken String accessToken,
+			@OAuthAccessTokenSecret String secretToken,
+    		String spreadsheet,
+    		String worksheet,
+    		List<NestedProcessor> nestedProcessors,
+    		@Optional @Default("0") int spreadsheetIndex,
+			@Optional @Default("0") int worksheetIndex) throws Exception {
+    	
+    	URL cellFeedUrl = this.getWorksheetEntry(accessToken, secretToken, spreadsheet, worksheet, spreadsheetIndex, worksheetIndex).getCellFeedUrl();
+    	
+    	CellFeed batchRequest = new CellFeed();
+    	
+    	MuleMessage message = RequestContext.getEvent().getMessage();
+    	message.setInvocationProperty(BATCH_REQUEST, batchRequest);
+    	message.setInvocationProperty(CELL_FEED_URL, cellFeedUrl);
+    	
+    	for (NestedProcessor proc : nestedProcessors) {
+    		proc.process();
+    	}
+    	
+    	 // Get the batch feed URL and submit the batch request
+        CellFeed feed = this.ssService.getFeed(cellFeedUrl, CellFeed.class);
+        Link batchLink = feed.getLink(Link.Rel.FEED_BATCH, Link.Type.ATOM);
+        URL batchUrl = new URL(batchLink.getHref());
+        CellFeed batchResponse = this.ssService.batch(batchUrl, batchRequest);;
+        
+        return batchResponse.getEntries();
+    }
+    
+    /**
+     * 
+     * @param row
+     * @param col
+     * @param formulaOrValue
+     * @throws Exception
+     */
+    @Processor
+    public void cellValue(int row, int col, String formulaOrValue) throws Exception {
+    	
+    	MuleMessage message = RequestContext.getEvent().getMessage();
+    	
+    	CellFeed batchRequest = message.getInvocationProperty(BATCH_REQUEST);
+    	URL cellFeedUrl = message.getInvocationProperty(CELL_FEED_URL);
+    	
+        String batchId = "R" + row + "C" + col;
+        URL entryUrl = new URL(cellFeedUrl.toString() + "/" + batchId);
+        CellEntry batchOperation = ssService.getEntry(entryUrl, CellEntry.class);
+        batchOperation.changeInputValueLocal(formulaOrValue);
+        BatchUtils.setBatchId(batchOperation, batchId);
+        BatchUtils.setBatchOperationType(batchOperation, BatchOperationType.UPDATE);
+    	
+        batchRequest.getEntries().add(batchOperation);
     }
     
     /**
@@ -322,7 +544,7 @@ public class GoogleSpreadSheetModule {
 
     	// Get the appropriate URL for a cell feed
     	URL cellFeedUrl = worksheetEntry.getCellFeedUrl();
-    	return this.service.getFeed(cellFeedUrl, CellFeed.class).getEntries();
+    	return this.ssService.getFeed(cellFeedUrl, CellFeed.class).getEntries();
     }
     
     /**
@@ -338,6 +560,7 @@ public class GoogleSpreadSheetModule {
      * @throws IOException when an error occurs in communication with the Google
      *         Spreadsheets service.
      */
+    @Processor
     public List<CellEntry> getCellRange(
     		@OAuthAccessToken String accessToken,
 			@OAuthAccessTokenSecret String secretToken,
@@ -355,7 +578,7 @@ public class GoogleSpreadSheetModule {
 	    query.setMaximumRow(maxRow);
 	    query.setMinimumCol(minCol);
 	    query.setMaximumCol(maxCol);
-	    return service.query(query, CellFeed.class).getEntries();
+	    return ssService.query(query, CellFeed.class).getEntries();
     }
     
     /**
@@ -368,6 +591,7 @@ public class GoogleSpreadSheetModule {
      * @throws IOException when an error occurs in communication with the Google
      *         Spreadsheets service.
      */
+    @Processor
     public List<CellEntry> search(
     		@OAuthAccessToken String accessToken,
 			@OAuthAccessTokenSecret String secretToken,
@@ -375,12 +599,12 @@ public class GoogleSpreadSheetModule {
     		String worksheet,
     		@Optional @Default("0") int spreadsheetIndex,
 			@Optional @Default("0") int worksheetIndex,
-    		String searchString) throws IOException, ServiceException {
+    		String query) throws IOException, ServiceException {
     	
-      CellQuery query = new CellQuery(this.getCellFeedUrl(accessToken, secretToken, spreadsheet, worksheet, spreadsheetIndex, worksheetIndex));
-      query.setFullTextQuery(searchString);
+      CellQuery cellQuery = new CellQuery(this.getCellFeedUrl(accessToken, secretToken, spreadsheet, worksheet, spreadsheetIndex, worksheetIndex));
+      cellQuery.setFullTextQuery(query);
       
-      return service.query(query, CellFeed.class).getEntries();
+      return ssService.query(cellQuery, CellFeed.class).getEntries();
     }
     
     /**
@@ -411,7 +635,7 @@ public class GoogleSpreadSheetModule {
     	
     	ListQuery listQuery = new ListQuery(ws.getListFeedUrl());
     	listQuery.setSpreadsheetQuery(query);
-        return service.query(listQuery, ListFeed.class).getEntries();
+        return ssService.query(listQuery, ListFeed.class).getEntries();
     }
     
     /**
@@ -434,7 +658,7 @@ public class GoogleSpreadSheetModule {
     		String nameValuePairs) throws IOException, ServiceException {
       
     	ListEntry newEntry = this.setEntries(new ListEntry(), nameValuePairs);
-    	service.insert(this.getListFeedURL(accessToken, secretToken, spreadsheet, worksheet, spreadsheetIndex, worksheetIndex), newEntry);
+    	ssService.insert(this.getListFeedURL(accessToken, secretToken, spreadsheet, worksheet, spreadsheetIndex, worksheetIndex), newEntry);
     }
 
     /**
@@ -458,7 +682,7 @@ public class GoogleSpreadSheetModule {
     		@Optional @Default("0") int spreadsheetIndex,
 			@Optional @Default("0") int worksheetIndex) throws IOException, ServiceException {
     	
-    	return service.getFeed(this.getListFeedURL(accessToken, secretToken, spreadsheet, worksheet, spreadsheetIndex, worksheetIndex), ListFeed.class).getEntries();
+    	return ssService.getFeed(this.getListFeedURL(accessToken, secretToken, spreadsheet, worksheet, spreadsheetIndex, worksheetIndex), ListFeed.class).getEntries();
     }
     
     /**
@@ -479,7 +703,7 @@ public class GoogleSpreadSheetModule {
     		String spreadsheet,
     		@Optional @Default("0") int spreadsheetIndex) throws IOException, ServiceException {
     	
-    	return service.getFeed(this.getRecordFeedURL(accessToken, secretToken, spreadsheet, spreadsheetIndex), TableFeed.class).getEntries();
+    	return ssService.getFeed(this.getRecordFeedURL(accessToken, secretToken, spreadsheet, spreadsheetIndex), TableFeed.class).getEntries();
     }
     
     /**
@@ -501,45 +725,9 @@ public class GoogleSpreadSheetModule {
     		@Optional @Default("0") int spreadsheetIndex,
     		String nameValuePairs) throws IOException, ServiceException {
 
-        this.service.insert(this.getRecordFeedURL(accessToken, secretToken, spreadsheet, spreadsheetIndex), this.setEntries(new RecordEntry(), nameValuePairs));
+        this.ssService.insert(this.getRecordFeedURL(accessToken, secretToken, spreadsheet, spreadsheetIndex), this.setEntries(new RecordEntry(), nameValuePairs));
     }
     
-    /**
-     * Returns a CellEntry with batch id and operation type that will tell the
-     * server to update the specified cell with the given value. The entry is
-     * fetched from the server in order to get the current edit link (for
-     * optimistic concurrency).
-     * 
-     * @param row the row number of the cell to operate on
-     * @param col the column number of the cell to operate on
-     * @param value the value to set in case of an update the cell to operate on
-     * 
-     * @throws ServiceException when the request causes an error in the Google
-     *         Spreadsheets service.
-     * @throws IOException when an error occurs in communication with the Google
-     *         Spreadsheets service.
-     */
-    private CellEntry createUpdateOperation(URL cellFeedUrl, int row, int col, String value) throws ServiceException, IOException {
-      String batchId = "R" + row + "C" + col;
-      URL entryUrl = new URL(cellFeedUrl.toString() + "/" + batchId);
-      CellEntry entry = service.getEntry(entryUrl, CellEntry.class);
-      entry.changeInputValueLocal(value);
-      BatchUtils.setBatchId(entry, batchId);
-      BatchUtils.setBatchOperationType(entry, BatchOperationType.UPDATE);
-
-      return entry;
-    }
-    
-//    public void batchCellRequest(
-//    		NestedProcessor nested) {
-//    	
-//    	nested.p
-//    	
-//    	nested.process()
-//    }
-    
-    
-
     
     /**
      * Main entry point. Parses arguments and creates and invokes the
@@ -557,7 +745,7 @@ public class GoogleSpreadSheetModule {
     		@Optional @Default("0") int spreadsheetIndex,
     		@Optional @Default("0") int worksheetIndex) throws IOException, ServiceException {
 
-    	this.connect(accessToken, secretToken);
+    	this.connectSS(accessToken, secretToken);
     	
     	if (purge) {
     		this.purgeWorksheet(accessToken, secretToken, spreadsheet, worksheet, spreadsheetIndex, worksheetIndex);
@@ -576,7 +764,7 @@ public class GoogleSpreadSheetModule {
     			// Break up the line by the delimiter and insert the cells
     			String[] cells = delim.split(line, -1);  
     			for (int col = 0; col < cells.length; col++) {
-    				this.insertCell(accessToken, secretToken, spreadsheet, worksheet, row + 1, col + 1, cells[col], spreadsheetIndex, worksheetIndex);
+    				this.setCellValue(accessToken, secretToken, spreadsheet, worksheet, row + 1, col + 1, cells[col], spreadsheetIndex, worksheetIndex);
     			}
         
     			// Advance the loop
@@ -656,21 +844,35 @@ public class GoogleSpreadSheetModule {
     	return list.get(index);
     }
     
-    private void connect(String accessToken, String secretToken) throws ServiceException {
-    	if (service == null) {
-    		GoogleOAuthParameters oauthParameters = new GoogleOAuthParameters();
-    		oauthParameters.setOAuthConsumerKey(this.consumerKey);
-    		oauthParameters.setOAuthConsumerSecret(this.consumerSecret);
-    		oauthParameters.setOAuthToken(accessToken);
-    		oauthParameters.setOAuthTokenSecret(secretToken);
-    		this.service = new SpreadsheetService(this.applicationName);
+    private void connectSS(String accessToken, String secretToken) throws ServiceException {
+    	if (this.ssService == null) {
+    		this.ssService = this.connect(new SpreadsheetService(this.applicationName), accessToken, secretToken);
     		
-    		try {
-    			service.setOAuthCredentials(oauthParameters, new OAuthHmacSha1Signer());
-    		} catch (OAuthException e) { 
-    			throw new ServiceException(e);
-    		}
+    		// workaround for issue described in http://code.google.com/p/gdata-java-client/issues/detail?id=103
+    		this.ssService.setHeader("If-Match", "*");
     	}
+    }
+    
+    private void connectDocs(String accessToken, String secretToken) throws ServiceException {
+    	if (this.docService == null) {
+    		this.docService = this.connect(new DocsService(this.applicationName), accessToken, secretToken);
+    	}
+    }
+    
+    private <T extends GoogleService> T connect(T service, String accessToken, String secretToken) throws ServiceException {
+		GoogleOAuthParameters oauthParameters = new GoogleOAuthParameters();
+		oauthParameters.setOAuthConsumerKey(this.consumerKey);
+		oauthParameters.setOAuthConsumerSecret(this.consumerSecret);
+		oauthParameters.setOAuthToken(accessToken);
+		oauthParameters.setOAuthTokenSecret(secretToken);
+		
+		try {
+			service.setOAuthCredentials(oauthParameters, new OAuthHmacSha1Signer());
+		} catch (OAuthException e) { 
+			throw new ServiceException(e);
+		}
+    	
+    	return service;
     }
     
     private ListEntry setEntries(ListEntry entryToChange, String nameValuePairs) {
@@ -688,7 +890,7 @@ public class GoogleSpreadSheetModule {
         return entryToChange;
     }
     
-    public RecordEntry setEntries(RecordEntry entryToChange, String nameValuePairs) {
+    private RecordEntry setEntries(RecordEntry entryToChange, String nameValuePairs) {
 	    // Split first by the commas between the different fields.
 	    for (String nameValuePair : nameValuePairs.split(",")) {
 

@@ -1,0 +1,1 @@
+Needs to start with -Dsun.net.http.allowRestrictedHeaders=true to avoid http error when authenticating to google

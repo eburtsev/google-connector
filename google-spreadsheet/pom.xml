@@ -116,25 +116,34 @@
 					<doclet>org.mule.devkit.doclet.Doclava</doclet>
 					<bootclasspath>${sun.boot.class.path}</bootclasspath>
 					<additionalparam>-quiet
-						-federate JDK http://download.oracle.com/javase/6/docs/api/index.html?
+						-federate JDK
+						http://download.oracle.com/javase/6/docs/api/index.html?
 						-federationxml JDK
 						http://doclava.googlecode.com/svn/static/api/openjdk-6.xml
-						-hdf project.artifactId "${project.artifactId}"
-						-hdf project.groupId "${project.groupId}"
+						-hdf
+						project.artifactId "${project.artifactId}"
+						-hdf project.groupId
+						"${project.groupId}"
 						-hdf project.version "${project.version}"
-						-hdf project.name "${project.name}"
+						-hdf
+						project.name "${project.name}"
 						-hdf project.repo.name
 						"${project.distributionManagement.repository.name}"
-						-hdf project.repo.id "${project.distributionManagement.repository.id}"
+						-hdf
+						project.repo.id "${project.distributionManagement.repository.id}"
 						-hdf project.repo.url
 						"${project.distributionManagement.repository.url}"
-						-hdf project.snapshotRepo.name
+						-hdf
+						project.snapshotRepo.name
 						"${project.distributionManagement.snapshotRepository.name}"
-						-hdf project.snapshotRepo.id
+						-hdf
+						project.snapshotRepo.id
 						"${project.distributionManagement.snapshotRepository.id}"
-						-hdf project.snapshotRepo.url
+						-hdf
+						project.snapshotRepo.url
 						"${project.distributionManagement.snapshotRepository.url}"
-						-d ${project.build.directory}/apidocs</additionalparam>
+						-d
+						${project.build.directory}/apidocs</additionalparam>
 					<useStandardDocletOptions>false</useStandardDocletOptions>
 					<additionalJOption>-J-Xmx1024m</additionalJOption>
 				</configuration>
@@ -211,11 +220,25 @@
 		</dependency>
 
 		<dependency>
-			<groupId>com.google.gdata</groupId>
+			<groupId>com.google.gdata.gdata-java-client</groupId>
+			<artifactId>gdata-spreadsheet-3.0</artifactId>
+			<version>1.46.0</version>
+		</dependency>
+
+		<dependency>
+			<groupId>com.google.gdata.gdata-java-client</groupId>
 			<artifactId>gdata-docs-3.0</artifactId>
-			<version>1.41.5</version>
+			<version>1.46.0</version>
+		</dependency>
+
+		<dependency>
+			<groupId>net.sourceforge.findbugs</groupId>
+			<artifactId>jsr305</artifactId>
+			<version>1.3.7</version>
+			<scope>provided</scope>
 		</dependency>
 	</dependencies>
+
 
 	<repositories>
 		<repository>
@@ -230,9 +253,14 @@
 			<url>http://repository.mulesoft.org/snapshots/</url>
 			<layout>default</layout>
 		</repository>
+		<!-- <repository> -->
+		<!-- <id>mandubian-gdata</id> -->
+		<!-- <url>http://mandubian-mvn.googlecode.com/svn/trunk/mandubian-mvn/repository/</url> -->
+		<!-- </repository> -->
 		<repository>
-			<id>mandubian-gdata</id>
-			<url>http://mandubian-mvn.googlecode.com/svn/trunk/mandubian-mvn/repository/</url>
+			<id>burtsev-net-maven</id>
+			<name>Burtsev.Net Maven Repository</name>
+			<url>http://maven.burtsev.net</url>
 		</repository>
 	</repositories>
 

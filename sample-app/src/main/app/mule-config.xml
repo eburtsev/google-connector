@@ -34,6 +34,8 @@
     	<gss:oauth-callback-config domain="gsample.muleion.com" localPort="${http.port}" remotePort="80"/>
     </gss:config>
 
+	
+
 	<flow name="authFlow">
 		<http:inbound-endpoint host="localhost" port="${http.port}" path="auth" exchange-pattern="request-response" />
 		<gss:authorize />
@@ -51,7 +53,7 @@
 			<http:body-to-parameter-map-transformer />
 		</http:inbound-endpoint>
 		<gss:get-spreadsheet spreadsheet="#[map-payload:spreadsheet]"/>
-
+		
 		<response>
 			<message-properties-transformer scope="outbound">
 				<add-message-property key="Content-Type" value="text/plain" />
@@ -300,6 +302,54 @@
 		</http:inbound-endpoint>
 		
 		<gss:search spreadsheet="#[map-payload:spreadsheet]" worksheet="#[map-payload:worksheet]" query="#[map-payload:query]"/>
+
+		<response>
+			<message-properties-transformer scope="outbound">
+				<add-message-property key="Content-Type" value="text/plain" />
+			</message-properties-transformer>
+			<custom-transformer class="org.mule.module.google.spreadsheet.sample.transformer.EntryToStringTransformer" />
+		</response>
+	</flow>
+	
+	<flow name="structured query">
+		<http:inbound-endpoint host="localhost" port="${http.port}" path="spreadsheet-structured-query" exchange-pattern="request-response">
+			<object-to-byte-array-transformer />
+			<http:body-to-parameter-map-transformer />
+		</http:inbound-endpoint>
+		
+		<gss:structured-query spreadsheet="#[map-payload:spreadsheet]" worksheet="#[map-payload:worksheet]" query="#[map-payload:query]"/>
+
+		<response>
+			<message-properties-transformer scope="outbound">
+				<add-message-property key="Content-Type" value="text/plain" />
+			</message-properties-transformer>
+			<custom-transformer class="org.mule.module.google.spreadsheet.sample.transformer.EntryToStringTransformer" />
+		</response>
+	</flow>
+	
+	<flow name="list tables">
+		<http:inbound-endpoint host="localhost" port="${http.port}" path="spreadsheet-list-tables" exchange-pattern="request-response">
+			<object-to-byte-array-transformer />
+			<http:body-to-parameter-map-transformer />
+		</http:inbound-endpoint>
+		
+		<gss:get-all-tables spreadsheet="#[map-payload:spreadsheet]" />
+
+		<response>
+			<message-properties-transformer scope="outbound">
+				<add-message-property key="Content-Type" value="text/plain" />
+			</message-properties-transformer>
+			<object-to-string-transformer />
+		</response>
+	</flow>
+	
+	<flow name="get list entries">
+		<http:inbound-endpoint host="localhost" port="${http.port}" path="spreadsheet-get-list-entries" exchange-pattern="request-response">
+			<object-to-byte-array-transformer />
+			<http:body-to-parameter-map-transformer />
+		</http:inbound-endpoint>
+		
+		<gss:get-all-list-entries spreadsheet="#[map-payload:spreadsheet]" worksheet="#[map-payload:worksheet]" />
 
 		<response>
 			<message-properties-transformer scope="outbound">

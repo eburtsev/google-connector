@@ -17,7 +17,7 @@ public class Cell extends Entry<CellEntry>{
 		super(delegate);
 	}
 	
-	public int getNumber() {
+	public int getColumnNumber() {
 		return this.delegate().getCell().getCol();
 	}
 	

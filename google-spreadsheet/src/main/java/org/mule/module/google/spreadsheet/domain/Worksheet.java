@@ -1,5 +1,6 @@
 package org.mule.module.google.spreadsheet.domain;
 
+import com.google.gdata.data.TextConstruct;
 import com.google.gdata.data.spreadsheet.WorksheetEntry;
 
 /**
@@ -33,5 +34,11 @@ public class Worksheet extends Entry<WorksheetEntry>{
 		this.delegate().setColCount(count);
 	}
 	
+	public String getName() {
+		return this.delegate().getTitle().getPlainText(); 
+	}
 	
+	public void setName(String v) {
+		this.delegate().setTitle(TextConstruct.plainText(v));
+	}
 }

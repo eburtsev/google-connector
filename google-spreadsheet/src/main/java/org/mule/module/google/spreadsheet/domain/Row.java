@@ -10,6 +10,10 @@ import java.util.List;
  */
 public class Row {
 
+	/**
+	 * Defaults to zero
+	 */
+	private int rowNumber = 0;
 	private List<Cell> cells = new ArrayList<Cell>();
 
 	public List<Cell> getCells() {
@@ -35,4 +39,13 @@ public class Row {
 	public void removeCell(int index) {
 		this.cells.remove(index);
 	}
+
+	public int getRowNumber() {
+		return rowNumber;
+	}
+
+	public void setRowNumber(int rowNumber) {
+		this.rowNumber = rowNumber;
+	}
+	
 }

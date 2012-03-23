@@ -3,6 +3,7 @@ package org.mule.module.google.spreadsheet.domain;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.google.gdata.data.TextConstruct;
 import com.google.gdata.data.spreadsheet.SpreadsheetEntry;
 import com.google.gdata.data.spreadsheet.WorksheetEntry;
 
@@ -23,8 +24,12 @@ public class Spreadsheet extends Entry<SpreadsheetEntry> {
 		super(delegate);
 		
 		try {
-			for (WorksheetEntry ws : delegate.getWorksheets()) {
-				this.worksheets.add(new Worksheet(ws));
+			List<WorksheetEntry> worksheets = delegate.getWorksheets();
+		
+			if (worksheets != null) {
+				for (WorksheetEntry ws : worksheets) {
+					this.worksheets.add(new Worksheet(ws));
+				}
 			}
 		} catch (Exception e) {
 			throw new RuntimeException("Could not create worksheets", e);
@@ -53,6 +58,14 @@ public class Spreadsheet extends Entry<SpreadsheetEntry> {
 	
 	public void removeWorksheet(int index) {
 		this.worksheets.remove(index);
+	}
+	
+	public String getTitle() {
+		return this.delegate().getTitle().getPlainText(); 
+	}
+	
+	public void setTitle(String v) {
+		this.delegate().setTitle(TextConstruct.plainText(v));
 	}
 
 }

@@ -4,7 +4,6 @@ import java.util.Date;
 
 import com.google.gdata.data.BaseEntry;
 import com.google.gdata.data.DateTime;
-import com.google.gdata.data.TextConstruct;
 
 /**
  * Base class for types 
@@ -26,28 +25,12 @@ public abstract class Entry<T extends BaseEntry<?>> {
 		this.delegate = delegate;
 	}
 	
-	public String getEtag() {
-		return delegate.getEtag();
-	}
-
 	public String getId() {
 		return delegate.getId();
 	}
 
-	public String getContent() {
-		return delegate.getPlainTextContent();
-	}
-
 	public Date getPublished() {
 		return new Date(delegate.getPublished().getValue());
-	}
-
-	public String getSummary() {
-		return delegate.getSummary().getPlainText();
-	}
-
-	public String getTitle() {
-		return delegate.getTitle().getPlainText();
 	}
 
 	public Date getUpdated() {
@@ -66,10 +49,6 @@ public abstract class Entry<T extends BaseEntry<?>> {
 		return new Date(delegate.getEdited().getValue());
 	}
 
-	public void setContent(String content) {
-		delegate.setContent(TextConstruct.plainText((content)));
-	}
-
 	public void setDraft(Boolean v) {
 		delegate.setDraft(v);
 	}
@@ -78,24 +57,12 @@ public abstract class Entry<T extends BaseEntry<?>> {
 		delegate.setEdited(new DateTime(date));
 	}
 
-	public void setEtag(String v) {
-		delegate.setEtag(v);
-	}
-
 	public void setId(String v) {
 		delegate.setId(v);
 	}
 
 	public void setPublished(Date v) {
 		delegate.setPublished(new DateTime(v));
-	}
-
-	public void setSummary(String v) {
-		delegate.setSummary(TextConstruct.plainText(v));
-	}
-
-	public void setTitle(String v) {
-		delegate.setTitle(TextConstruct.plainText(v));
 	}
 
 	public void setUpdated(Date v) {

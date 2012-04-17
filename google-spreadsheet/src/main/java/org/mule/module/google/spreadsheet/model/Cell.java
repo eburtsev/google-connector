@@ -1,4 +1,4 @@
-package org.mule.module.google.spreadsheet.domain;
+package org.mule.module.google.spreadsheet.model;
 
 import com.google.gdata.data.spreadsheet.CellEntry;
 
@@ -36,5 +36,4 @@ public class Cell extends Entry<CellEntry>{
 	public void setValue(String value) {
 		this.setFormula(value);
 	}
-	
 }

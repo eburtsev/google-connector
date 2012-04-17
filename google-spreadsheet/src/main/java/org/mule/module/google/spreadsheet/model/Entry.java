@@ -1,4 +1,4 @@
-package org.mule.module.google.spreadsheet.domain;
+package org.mule.module.google.spreadsheet.model;
 
 import java.util.Date;
 
@@ -45,16 +45,8 @@ public abstract class Entry<T extends BaseEntry<?>> {
 		return delegate.isDraft();
 	}
 	
-	public Date getEdited() {
-		return new Date(delegate.getEdited().getValue());
-	}
-
 	public void setDraft(Boolean v) {
 		delegate.setDraft(v);
-	}
-
-	public void setEdited(Date date) {
-		delegate.setEdited(new DateTime(date));
 	}
 
 	public void setId(String v) {
@@ -63,10 +55,6 @@ public abstract class Entry<T extends BaseEntry<?>> {
 
 	public void setPublished(Date v) {
 		delegate.setPublished(new DateTime(v));
-	}
-
-	public void setUpdated(Date v) {
-		delegate.setUpdated(new DateTime(v));
 	}
 
 	public void setVersionId(String v) {

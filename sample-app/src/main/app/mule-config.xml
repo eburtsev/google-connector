@@ -53,7 +53,7 @@
 			<http:body-to-parameter-map-transformer />
 		</http:inbound-endpoint>
 		<gss:get-spreadsheet spreadsheet="#[map-payload:spreadsheet]"/>
-		
+
 		<response>
 			<message-properties-transformer scope="outbound">
 				<add-message-property key="Content-Type" value="text/plain" />

@@ -16,17 +16,15 @@ import com.google.gdata.data.spreadsheet.WorksheetEntry;
  */
 public class Worksheet extends Entry<WorksheetEntry>{
 
-	private Spreadsheet spreadsheet;
 	private int index = 0;
 	private List<Row> rows = new ArrayList<Row>();
 	
 	public Worksheet() {
-		this(new WorksheetEntry(), null);
+		this(new WorksheetEntry());
 	}
 	
-	public Worksheet(WorksheetEntry delegate, Spreadsheet spreadsheet) {
-		super(delegate);
-		this.setSpreadsheet(spreadsheet);
+	public Worksheet(WorksheetEntry entry) {
+		super(entry);
 	}
 	
 	public void addRow(Row row) {
@@ -74,14 +72,6 @@ public class Worksheet extends Entry<WorksheetEntry>{
 		this.delegate().setTitle(new PlainTextConstruct(title));
 	}
 
-	public Spreadsheet getSpreadsheet() {
-		return spreadsheet;
-	}
-
-	public void setSpreadsheet(Spreadsheet spreadsheet) {
-		this.spreadsheet = spreadsheet;
-	}
-
 	public int getIndex() {
 		return index;
 	}
@@ -100,7 +90,4 @@ public class Worksheet extends Entry<WorksheetEntry>{
 			row.setWorksheet(this);
 		}
 	}
-	
-	
-	
 }

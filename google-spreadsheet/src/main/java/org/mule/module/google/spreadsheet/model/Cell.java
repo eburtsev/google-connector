@@ -1,39 +1,59 @@
 package org.mule.module.google.spreadsheet.model;
 
-import com.google.gdata.data.spreadsheet.CellEntry;
 
 /**
  * 
  * @author mariano.gonzalez@mulesoft.com
  *
  */
-public class Cell extends Entry<CellEntry>{
+public class Cell implements Comparable<Cell> {
 
-	public Cell() {
-		this(new CellEntry());
+	private int rowNumber = 0;
+	private int columnNumber = 0;
+	private String valueOrFormula;
+	
+	@Override
+	public boolean equals(Object obj) {
+		if (obj instanceof Cell) {
+			Cell o = (Cell) obj;
+			return this.getColumnNumber() == o.getColumnNumber() && this.getRowNumber() == o.getRowNumber();
+		}
+		
+		return false;
 	}
 	
-	public Cell(CellEntry delegate) {
-		super(delegate);
+	@Override
+	public int hashCode() {
+		return this.getColumnNumber() * this.getRowNumber() * 11;
 	}
 	
+	@Override
+	public int compareTo(Cell o) {
+		return new Integer(this.getColumnNumber()).compareTo(o.getColumnNumber());
+	}
+
 	public int getColumnNumber() {
-		return this.delegate().getCell().getCol();
+		return columnNumber;
+	}
+
+	public void setColumnNumber(int columnNumber) {
+		this.columnNumber = columnNumber;
+	}
+
+	public String getValueOrFormula() {
+		return valueOrFormula;
+	}
+
+	public void setValueOrFormula(String valueOrFormula) {
+		this.valueOrFormula = valueOrFormula;
+	}
+
+	public int getRowNumber() {
+		return rowNumber;
+	}
+
+	public void setRowNumber(int rowNumber) {
+		this.rowNumber = rowNumber;
 	}
 	
-	public String getFormula() {
-		return this.delegate().getCell().getInputValue();
-	}
-	
-	public void setFormula(String value) {
-		this.delegate().changeInputValueLocal(value);
-	}
-	
-	public String getValue() {
-		return this.delegate().getCell().getValue();
-	}
-	
-	public void setValue(String value) {
-		this.setFormula(value);
-	}
 }

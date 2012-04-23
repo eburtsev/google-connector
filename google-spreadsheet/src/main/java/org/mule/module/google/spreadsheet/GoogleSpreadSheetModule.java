@@ -116,11 +116,11 @@ public class GoogleSpreadSheetModule {
     @Optional
     @Default("Mule-GoogleDocsConnector/1.0")
     private String applicationName;
-    
+
     private SpreadsheetService ssService;
     
     private DocsService docService;
-    
+
     /**
      * 
      * Retrieves the spreadsheets that the authenticated user has access to.
@@ -783,5 +783,13 @@ public class GoogleSpreadSheetModule {
 
 	public void setScope(String scope) {
 		this.scope = scope;
+	}
+
+	public String getApplicationName() {
+		return applicationName;
+	}
+
+	public void setApplicationName(String applicationName) {
+		this.applicationName = applicationName;
 	}
 }

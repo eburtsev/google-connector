@@ -15,16 +15,10 @@ public class Row implements Comparable<Row>{
 	 * Defaults to zero
 	 */
 	private int rowNumber = 0;
-	private Worksheet worksheet = null;
 	
 	private List<Cell> cells = new ArrayList<Cell>();
 	
 	public Row(){}
-	
-	public Row(Worksheet worksheet) {
-		this();
-		this.setWorksheet(worksheet);
-	}
 	
 	@Override
 	public int compareTo(Row o) {
@@ -56,13 +50,18 @@ public class Row implements Comparable<Row>{
 
 	public void setCells(List<Cell> cells) {
 		this.cells = cells;
+		for (Cell cell : cells) {
+			cell.setRowNumber(this.rowNumber);
+		}
 	}
 	
 	public void addCell(Cell cell){
+		cell.setRowNumber(this.rowNumber);
 		this.cells.add(cell);
 	}
 	
 	public void addCell(Cell cell, int index) {
+		cell.setRowNumber(this.rowNumber);
 		this.cells.add(index, cell);
 	}
 	
@@ -82,12 +81,4 @@ public class Row implements Comparable<Row>{
 		this.rowNumber = rowNumber;
 	}
 
-	public Worksheet getWorksheet() {
-		return worksheet;
-	}
-
-	public void setWorksheet(Worksheet worksheet) {
-		this.worksheet = worksheet;
-	}
-	
 }

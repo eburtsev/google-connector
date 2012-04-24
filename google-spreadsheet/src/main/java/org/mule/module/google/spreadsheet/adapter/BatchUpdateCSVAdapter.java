@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.commons.lang.StringUtils;
+import org.apache.log4j.Logger;
 import org.mule.module.google.spreadsheet.GoogleSpreadSheetModule;
 import org.mule.module.google.spreadsheet.model.Cell;
 import org.mule.module.google.spreadsheet.model.Row;
@@ -15,6 +16,8 @@ import org.mule.module.google.spreadsheet.model.Row;
  */
 public class BatchUpdateCSVAdapter extends AbstractBatchUpdateAdapter {
 
+	private static final Logger logger = Logger.getLogger(BatchUpdateCSVAdapter.class);
+	
 	private int startingRow;
 	private int startingColumn;
 	private String columnSeparator;
@@ -39,6 +42,10 @@ public class BatchUpdateCSVAdapter extends AbstractBatchUpdateAdapter {
 		
 		if (StringUtils.isEmpty(input)) {
 			throw new IllegalArgumentException("input is empty");
+		}
+		
+		if (logger.isDebugEnabled()) {
+			logger.debug(String.format("extracting rows using lineSeparator: %s, columnSepartor:%s from payload:\n%s", lineSeparator, columnSeparator, payload));
 		}
 		
 		String[] lines = input.split(this.lineSeparator);

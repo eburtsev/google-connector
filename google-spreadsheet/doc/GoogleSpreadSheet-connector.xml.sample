@@ -1,3 +1,35 @@
-<!-- BEGIN_INCLUDE(googlespreadsheet:my-processor) -->
-    <googlespreadsheet:my-processor content="#[map-payload:content]" />
-<!-- END_INCLUDE(googlespreadsheet:my-processor) -->
+<!-- BEGIN_INCLUDE(gss:get-all-spreadsheets) -->
+    <gss:get-all-spreadsheets />
+<!-- END_INCLUDE(gss:get-all-spreadsheets) -->
+<!-- BEGIN_INCLUDE(gss:create-spreadsheet) -->
+	<gss:create-spreadsheet title="My mule Spreadsheet"/>
+<!-- END_INCLUDE(gss:create-spreadsheet) -->
+<!-- BEGIN_INCLUDE(gss:get-all-worksheets) -->
+	<gss:get-all-worksheets spreadsheet="My mule Spreadsheet"/>
+<!-- END_INCLUDE(gss:get-all-worksheets) -->
+<!-- BEGIN_INCLUDE(gss:create-worksheet spreadsheet) -->
+	<gss:create-worksheet spreadsheet="My mule Spreadsheet" title="My mule worksheet"
+						  rowCount="10" colCount="15"/>
+<!-- END_INCLUDE(gss:create-worksheet spreadsheet) -->
+<!-- BEGIN_INCLUDE(gss:delete-worksheet spreadsheet) -->
+	<gss:delete-worksheet spreadsheet="My mule Spreadsheet" worksheet="My mule worksheet" />
+<!-- END_INCLUDE(gss:delete-worksheet spreadsheet) -->
+<!-- BEGIN_INCLUDE(gss:update-worksheet-metadata) -->
+	<gss:update-worksheet-metadata spreadsheet="My mule Spreadsheet" worksheet="My mule worksheet" 
+				title="#[map-payload:title]" rowCount="#[map-payload:rowCount]" colCount="#[map-payload:colCount]"
+				summary="#[map-payload:summary]"/>
+<!-- END_INCLUDE(gss:update-worksheet-metadata) -->
+<!-- BEGIN_INCLUDE(gss:set-row-values) -->
+	<!-- use a custom transformer to create the list of rows or better yet, generate it using datamapper -->
+	<custom-transformer class="org.mule.module.google.spreadsheet.sample.transformer.BatchRowsBuilder" />
+	<gss:set-row-values spreadsheet="My mule Spreadsheet" worksheet="My mule worksheet" purge="true"/>
+<!-- END_INCLUDE(gss:set-row-values) -->
+<!-- BEGIN_INCLUDE(gss:set-csv-values) -->
+	<gss:set-csv-values spreadsheet="My mule Spreadsheet" worksheet="My mule worksheet" purge="true"/>
+<!-- END_INCLUDE(gss:set-csv-values) -->
+<!-- BEGIN_INCLUDE(gss:get-authors) -->
+	<gss:get-authors spreadsheet="My mule Spreadsheet" />
+<!-- END_INCLUDE(gss:get-authors) -->
+<!-- BEGIN_INCLUDE(gss:get-column-headers) -->
+	<gss:get-column-headers spreadsheet="My mule Spreadsheet" worksheet="My mule worksheet" />
+<!-- END_INCLUDE(gss:get-column-headers) -->

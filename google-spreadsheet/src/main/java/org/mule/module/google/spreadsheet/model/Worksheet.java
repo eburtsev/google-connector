@@ -28,7 +28,6 @@ public class Worksheet extends Entry<WorksheetEntry>{
 	}
 	
 	public void addRow(Row row) {
-		row.setWorksheet(this);
 		this.rows.add(row);
 	}
 	
@@ -86,8 +85,5 @@ public class Worksheet extends Entry<WorksheetEntry>{
 
 	public void setRows(List<Row> rows) {
 		this.rows = rows;
-		for (Row row : rows) {
-			row.setWorksheet(this);
-		}
 	}
 }

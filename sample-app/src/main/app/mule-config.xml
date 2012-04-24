@@ -34,8 +34,6 @@
     	<gss:oauth-callback-config domain="gsample.muleion.com" localPort="${http.port}" remotePort="80"/>
     </gss:config>
 
-	
-
 	<flow name="authFlow">
 		<http:inbound-endpoint host="localhost" port="${http.port}" path="auth" exchange-pattern="request-response" />
 		<gss:authorize />
@@ -47,12 +45,13 @@
 		</response>
 	</flow>
 	
-	<flow name="getSpreadsheet">
+	
+	<flow name="getSpreadsheetByTitle">
 		<http:inbound-endpoint host="localhost" port="${http.port}" path="spreadsheet" exchange-pattern="request-response">
 			<object-to-byte-array-transformer />
 			<http:body-to-parameter-map-transformer />
 		</http:inbound-endpoint>
-		<gss:get-spreadsheet spreadsheet="#[map-payload:spreadsheet]"/>
+		<gss:get-spreadsheets-by-title title="#[map-payload:spreadsheet]"/>
 
 		<response>
 			<message-properties-transformer scope="outbound">
@@ -68,7 +67,7 @@
 			<http:body-to-parameter-map-transformer />
 		</http:inbound-endpoint>
 		
-		<gss:get-worksheet spreadsheet="#[map-payload:spreadsheet]" worksheet="#[map-payload:worksheet]"/>
+		<gss:get-worksheet-by-title spreadsheet="#[map-payload:spreadsheet]" title="#[map-payload:worksheet]"/>
 
 		<response>
 			<message-properties-transformer scope="outbound">
@@ -140,14 +139,13 @@
 		</response>
 	</flow>
 	
-	<flow name="updateWorksheet">
-		<http:inbound-endpoint host="localhost" port="${http.port}" path="update-worksheet" exchange-pattern="request-response">
+	<flow name="deleteWorksheet">
+		<http:inbound-endpoint host="localhost" port="${http.port}" path="delete-worksheet" exchange-pattern="request-response">
 			<object-to-byte-array-transformer />
 			<http:body-to-parameter-map-transformer />
 		</http:inbound-endpoint>
 		
-		<gss:update-worksheet spreadsheet="#[map-payload:spreadsheet]" worksheet="#[map-payload:worksheet]" 
-				title="#[map-payload:title]" rowCount="#[map-payload:rowCount]" colCount="#[map-payload:colCount]"/>
+		<gss:delete-worksheet spreadsheet="#[map-payload:spreadsheet]" worksheet="#[map-payload:worksheet]" />
 
 		<response>
 			<message-properties-transformer scope="outbound">
@@ -157,13 +155,16 @@
 		</response>
 	</flow>
 	
-	<flow name="deleteWorksheet">
-		<http:inbound-endpoint host="localhost" port="${http.port}" path="delete-worksheet" exchange-pattern="request-response">
+	
+	<flow name="updateWorksheetMetadata">
+		<http:inbound-endpoint host="localhost" port="${http.port}" path="update-worksheet-metadata" exchange-pattern="request-response">
 			<object-to-byte-array-transformer />
 			<http:body-to-parameter-map-transformer />
 		</http:inbound-endpoint>
 		
-		<gss:delete-worksheet spreadsheet="#[map-payload:spreadsheet]" worksheet="#[map-payload:worksheet]" />
+		<gss:update-worksheet-metadata spreadsheet="#[map-payload:spreadsheet]" worksheet="#[map-payload:worksheet]" 
+				title="#[map-payload:title]" rowCount="#[map-payload:rowCount]" colCount="#[map-payload:colCount]"
+				summary="#[map-payload:summary]"/>
 
 		<response>
 			<message-properties-transformer scope="outbound">
@@ -201,7 +202,7 @@
 			<message-properties-transformer scope="outbound">
 				<add-message-property key="Content-Type" value="text/plain" />
 			</message-properties-transformer>
-			<object-to-string-transformer />
+			<custom-transformer class="org.mule.module.google.spreadsheet.sample.transformer.CellToStringTransformer" />
 		</response>
 	</flow>
 	
@@ -219,7 +220,6 @@
 			<message-properties-transformer scope="outbound">
 				<add-message-property key="Content-Type" value="text/plain" />
 			</message-properties-transformer>
-			<object-to-string-transformer />
 		</response>
 	</flow>
 	
@@ -257,7 +257,6 @@
 			<message-properties-transformer scope="outbound">
 				<add-message-property key="Content-Type" value="text/plain" />
 			</message-properties-transformer>
-			<custom-transformer class="org.mule.module.google.spreadsheet.sample.transformer.BatchResponseTransformer" />
 		</response>
 	</flow>
 	
@@ -273,7 +272,7 @@
 			<message-properties-transformer scope="outbound">
 				<add-message-property key="Content-Type" value="text/plain" />
 			</message-properties-transformer>
-			<custom-transformer class="org.mule.module.google.spreadsheet.sample.transformer.EntryToStringTransformer" />
+			<custom-transformer class="org.mule.module.google.spreadsheet.sample.transformer.CellToStringTransformer" />
 		</response>
 	</flow>
 	
@@ -291,7 +290,7 @@
 			<message-properties-transformer scope="outbound">
 				<add-message-property key="Content-Type" value="text/plain" />
 			</message-properties-transformer>
-			<custom-transformer class="org.mule.module.google.spreadsheet.sample.transformer.EntryToStringTransformer" />
+			<custom-transformer class="org.mule.module.google.spreadsheet.sample.transformer.CellToStringTransformer" />
 		</response>
 	</flow>
 	
@@ -307,57 +306,54 @@
 			<message-properties-transformer scope="outbound">
 				<add-message-property key="Content-Type" value="text/plain" />
 			</message-properties-transformer>
-			<custom-transformer class="org.mule.module.google.spreadsheet.sample.transformer.EntryToStringTransformer" />
+			<custom-transformer class="org.mule.module.google.spreadsheet.sample.transformer.CellToStringTransformer" />
 		</response>
 	</flow>
 	
-	<flow name="structured query">
-		<http:inbound-endpoint host="localhost" port="${http.port}" path="spreadsheet-structured-query" exchange-pattern="request-response">
+	<flow name="update from rows">
+		<http:inbound-endpoint host="localhost" port="${http.port}" path="update-from-rows" exchange-pattern="request-response">
 			<object-to-byte-array-transformer />
 			<http:body-to-parameter-map-transformer />
 		</http:inbound-endpoint>
 		
-		<gss:structured-query spreadsheet="#[map-payload:spreadsheet]" worksheet="#[map-payload:worksheet]" query="#[map-payload:query]"/>
+		<message-properties-transformer scope="outbound">
+			<add-message-property key="spreadsheet" value="#[map-payload:spreadsheet]" />
+			<add-message-property key="worksheet" value="#[map-payload:worksheet]" />	
+		</message-properties-transformer>
+		
+		<custom-transformer class="org.mule.module.google.spreadsheet.sample.transformer.BatchRowsBuilder" />
+		<gss:set-row-values spreadsheet="#[header:spreadsheet]" worksheet="#[header:worksheet]" purge="true"/>
 
 		<response>
 			<message-properties-transformer scope="outbound">
 				<add-message-property key="Content-Type" value="text/plain" />
 			</message-properties-transformer>
-			<custom-transformer class="org.mule.module.google.spreadsheet.sample.transformer.EntryToStringTransformer" />
 		</response>
 	</flow>
 	
-	<flow name="list tables">
-		<http:inbound-endpoint host="localhost" port="${http.port}" path="spreadsheet-list-tables" exchange-pattern="request-response">
+	
+	<flow name="update from csv">
+		<http:inbound-endpoint host="localhost" port="${http.port}" path="update-from-csv" exchange-pattern="request-response">
 			<object-to-byte-array-transformer />
 			<http:body-to-parameter-map-transformer />
 		</http:inbound-endpoint>
 		
-		<gss:get-all-tables spreadsheet="#[map-payload:spreadsheet]" />
+		<message-properties-transformer scope="outbound">
+			<add-message-property key="spreadsheet" value="#[map-payload:spreadsheet]" />
+			<add-message-property key="worksheet" value="#[map-payload:worksheet]" />	
+		</message-properties-transformer>
+		
+		<custom-transformer class="org.mule.module.google.spreadsheet.sample.transformer.CsvLoaderTransformer" />
+		<gss:set-csv-values spreadsheet="#[header:spreadsheet]" worksheet="#[header:worksheet]" purge="true"/>
 
 		<response>
 			<message-properties-transformer scope="outbound">
 				<add-message-property key="Content-Type" value="text/plain" />
 			</message-properties-transformer>
-			<object-to-string-transformer />
 		</response>
 	</flow>
 	
-	<flow name="get list entries">
-		<http:inbound-endpoint host="localhost" port="${http.port}" path="spreadsheet-get-list-entries" exchange-pattern="request-response">
-			<object-to-byte-array-transformer />
-			<http:body-to-parameter-map-transformer />
-		</http:inbound-endpoint>
-		
-		<gss:get-all-list-entries spreadsheet="#[map-payload:spreadsheet]" worksheet="#[map-payload:worksheet]" />
-
-		<response>
-			<message-properties-transformer scope="outbound">
-				<add-message-property key="Content-Type" value="text/plain" />
-			</message-properties-transformer>
-			<custom-transformer class="org.mule.module.google.spreadsheet.sample.transformer.EntryToStringTransformer" />
-		</response>
-	</flow>
+	
 	
 	<flow name="AppStatusFlow">
         <http:inbound-endpoint exchange-pattern="request-response" host="localhost" port="${http.port}" path="appstatus"/>

@@ -33,6 +33,7 @@ import org.mule.api.NestedProcessor;
 import org.mule.api.annotations.Configurable;
 import org.mule.api.annotations.Module;
 import org.mule.api.annotations.Processor;
+import org.mule.api.annotations.lifecycle.Start;
 import org.mule.api.annotations.oauth.OAuth;
 import org.mule.api.annotations.oauth.OAuthAccessToken;
 import org.mule.api.annotations.oauth.OAuthAccessTokenSecret;
@@ -44,6 +45,7 @@ import org.mule.api.annotations.param.Optional;
 import org.mule.api.annotations.param.Payload;
 import org.mule.module.google.spreadsheet.adapter.BatchUpdateCSVAdapter;
 import org.mule.module.google.spreadsheet.adapter.BatchUpdateRowAdapter;
+import org.mule.module.google.spreadsheet.adapter.BatchUpdateSingleCellAdapter;
 import org.mule.module.google.spreadsheet.model.Cell;
 import org.mule.module.google.spreadsheet.model.ModelParser;
 import org.mule.module.google.spreadsheet.model.Row;
@@ -104,6 +106,9 @@ public class GoogleSpreadSheetModule {
     @OAuthConsumerSecret
     private String consumerSecret;
     
+    /**
+     * The OAuth scopes you want to request
+     */
     @OAuthScope
     @Configurable
     @Optional
@@ -112,23 +117,60 @@ public class GoogleSpreadSheetModule {
     
     private FeedURLFactory factory = FeedURLFactory.getDefault();
     
+    /**
+     * Application name to communicate to google
+     */
     @Configurable
     @Optional
     @Default("Mule-GoogleDocsConnector/1.0")
     private String applicationName;
     
+    /**
+     * An instance of {@link com.google.gdata.client.spreadsheet.SpreadsheetService}
+     * to use when consume google's api. A default gdata instance is used if none
+     * specified. Normally you would only override the default instance when testing.
+     */
+    @Configurable
+    @Optional
     private SpreadsheetService ssService;
     
-    private DocsService docService;
+    private boolean ssServiceConnected = false;
     
     /**
+     * An instance of {@link com.google.gdata.client.docs.DocsService}
+     * to use when consume google's api. A default gdata instance is used if none
+     * specified. Normally you would only override the default instance when testing.
+     */
+    @Configurable
+    @Optional
+    private DocsService docService;
+    
+    private boolean docsServiceConnected = false;
+    
+    /**
+     * Instanciates {@link org.mule.module.google.spreadsheet.GoogleSpreadSheetModule.ssService} and
+     * {@link org.mule.module.google.spreadsheet.GoogleSpreadSheetModule.docService} if none has been specifieds
+     */
+    @Start
+    public void init() {
+    	if (this.ssService == null) {
+    		this.ssService = new SpreadsheetService(this.applicationName);
+    	}
+    	
+    	if (this.docService == null) {
+    		this.docService = new DocsService(this.applicationName);
+    	}
+    }
+    
+    /**
+     * Returns all the spreadsheets associated with the user's account
      * 
-     * Retrieves the spreadsheets that the authenticated user has access to.
-     *
-     * {@sample.xml ../../../doc/GoogleDocs-connector.xml.sample googledocs:listDocuments}
+     * {@sample.xml ../../../doc/GoogleSpreadSheet-connector.xml.sample gss:get-all-spreadsheets}
      * 
-     * @param accessToken
-     * @return list of documents
+     * 
+     * @param accessToken OAuth accessToken
+     * @param secretToken OAuth secretToken
+     * @return a list of @{link org.mule.module.google.spreadsheet.model.Spreadsheet}
      * @throws OAuthException
      * @throws IOException
      * @throws ServiceException
@@ -141,11 +183,15 @@ public class GoogleSpreadSheetModule {
         return ModelParser.parseSpreadsheet(this.getSsService(accessToken, secretToken).getFeed(factory.getSpreadsheetsFeedUrl(), SpreadsheetFeed.class));
     }
     
+ 
     /**
-     * 
-     * @param accessToken
-     * @param secretToken
-     * @param spreadsheet
+     * Creates a new spreadsheet using a given title
+     *  
+     * {@sample.xml ../../../doc/GoogleSpreadSheet-connector.xml.sample gss:get-all-spreadsheets}
+     *  
+     * @param accessToken OAuth accessToken
+     * @param secretToken OAuth secretToken
+     * @param title the title you want the new spreadsheet to have
      * @throws OAuthException
      * @throws IOException
      * @throws ServiceException
@@ -163,12 +209,19 @@ public class GoogleSpreadSheetModule {
     }
     
     /**
-     * Lists all the worksheets in the loaded spreadsheet.
+     * Lists all the worksheets contained in an specified spreadsheet
      * 
-     * @throws ServiceException when the request causes an error in the Google
-     *         Spreadsheets service.
-     * @throws IOException when an error occurs in communication with the Google
-     *         Spreadsheets service.
+     * {@sample.xml ../../../doc/GoogleSpreadSheet-connector.xml.sample gss:get-all-worksheets}
+     * 
+     * @param accessToken OAuth accessToken
+     * @param secretToken OAuth secretToken
+     * @param spreadsheet the title of the spreadsheet you want to get the worksheets from
+     * @param spreadsheetIndex google's api allows for several spreadsheet to have the same name. In this cases
+     * 							it returns a list with all the ones matching the given title. Use this optional
+     * 							attribute to specify the zero-based list index of the want you want to use
+     * @return a list of {@link org.mule.module.google.spreadsheet.model.Worksheet}
+     * @throws IOException
+     * @throws ServiceException
      */
     @Processor
     public List<Worksheet> getAllWorksheets(
@@ -182,17 +235,22 @@ public class GoogleSpreadSheetModule {
     }
     
     /**
-     * Creates a new worksheet in the loaded spreadsheets, using the title and
-     * sizes given.
+     * Creates a new worksheet for an specified spreadsheet
      * 
-     * @param title a String containing a name for the new worksheet.
-     * @param rowCount the number of rows the new worksheet should have.
-     * @param colCount the number of columns the new worksheet should have.
-     * 
-     * @throws ServiceException when the request causes an error in the Google
-     *         Spreadsheets service.
-     * @throws IOException when an error occurs in communication with the Google
-     *         Spreadsheets service.
+     * {@sample.xml ../../../doc/GoogleSpreadSheet-connector.xml.sample gss:create-worksheet spreadsheet}
+     *  
+     * @param accessToken OAuth accessToken
+     * @param secretToken OAuth secretToken
+     * @param spreadsheet the title of the spreadsheet that will contain the new worksheet
+     * @param spreadsheetIndex google's api allows for several spreadsheet to have the same name. In this cases
+     * 							it returns a list with all the ones matching the given title. Use this optional
+     * 							attribute to specify the zero-based list index of the want you want to use
+     * @param title the title you want the new worksheet to have
+     * @param rowCount the initial number of rows you want the worksheet to have
+     * @param colCount the initial number of columns you want the worksheet to have
+     * @return an instance of {@link org.mule.module.google.spreadsheet.model.Worksheet} representing the newly created worksheet
+     * @throws IOException
+     * @throws ServiceException
      */
     @Processor
     public Worksheet createWorksheet(
@@ -215,17 +273,61 @@ public class GoogleSpreadSheetModule {
     }
     
     /**
+     * Deletes an specified worksheet
      * 
+     * {@sample.xml ../../../doc/GoogleSpreadSheet-connector.xml.sample gss:create-worksheet spreadsheet}
      * 
-     * @param oldTitle a String specifying the worksheet to update.
-     * @param newTitle a String containing the new name for the worksheet.
-     * @param rowCount the number of rows the new worksheet should have.
-     * @param colCount the number of columns the new worksheet should have.
+     * @param accessToken OAuth accessToken
+     * @param secretToken OAuth secretToken
+     * @param spreadsheet the title of the spreadsheet that contains the worksheet to be deleted
+     * @param worksheet  the title of the worksheet you want to delete
+     * @param spreadsheetIndex google's api allows for several spreadsheet to have the same name. In this cases
+     * 							it returns a list with all the ones matching the given title. Use this optional
+     * 							attribute to specify the zero-based list index of the want you want to use
+     * @param worksheetIndex google's api allows for several worksheets to have the same name. In this cases
+     * 							it returns a list with all the ones matching the given title. Use this optional
+     * 							attribute to specify the zero-based list index of the want you want to use
+     * @throws IOException
+     * @throws ServiceException
+     */
+    @Processor
+    public void deleteWorksheet(
+					@OAuthAccessToken String accessToken,
+					@OAuthAccessTokenSecret String secretToken,
+					String spreadsheet,
+		    		String worksheet,
+		    		@Optional @Default("0") int spreadsheetIndex,
+		    		@Optional @Default("0") int worksheetIndex) throws IOException, ServiceException {
+    	
+    	WorksheetEntry ws = this.getItem(this.getWorksheetEntriesByTitle(accessToken, secretToken, spreadsheet, worksheet, spreadsheetIndex), worksheetIndex);
+    	ws.delete();
+    }
+    
+    /**
      * 
-     * @throws ServiceException when the request causes an error in the Google
-     *         Spreadsheets service.
-     * @throws IOException when an error occurs in communication with the Google
-     *         Spreadsheets service.
+     * This processor allows updating a worksheet's metadata, constituted by
+     * its title, dimensions, summary, draft and editability status.
+     * 
+     * {@sample.xml ../../../doc/GoogleSpreadSheet-connector.xml.sample gss:update-worksheet-metadata}
+     * 
+     * @param accessToken OAuth accessToken
+     * @param secretToken OAuth secretToken
+     * @param spreadsheet the title of the spreadsheet you want to update
+     * @param worksheet  the title of the worksheet you want to update
+     * @param title if specified, it changes the title you want to set
+     * @param draft if specified, it changes the value of the draft property
+     * @param canEdit if specified, it changes the worksheet's editability
+     * @param summary if specified, it changes the worksheet's summary
+     * @param rowCount if a value greater than zero is specified, it changes the amount of rows in the worksheet
+     * @param colCount if a value greater than zero is specified, it changes the amount of columns in the worksheet
+     * @param spreadsheetIndex google's api allows for several spreadsheet to have the same name. In this cases
+     * 							it returns a list with all the ones matching the given title. Use this optional
+     * 							attribute to specify the zero-based list index of the want you want to use
+     * @param worksheetIndex google's api allows for several worksheets to have the same name. In this cases
+     * 							it returns a list with all the ones matching the given title. Use this optional
+     * 							attribute to specify the zero-based list index of the want you want to use
+     * @throws IOException
+     * @throws ServiceException
      */
     @Processor
     public void updateWorksheetMetadata(
@@ -261,7 +363,7 @@ public class GoogleSpreadSheetModule {
     		
     	}
     	
-    	if (canEdit) {
+    	if (canEdit != null) {
     		ws.setCanEdit(canEdit);
     	}
     	
@@ -273,36 +375,24 @@ public class GoogleSpreadSheetModule {
     }
     
     /**
-     * Deletes the worksheet specified by the title parameter. Note that worksheet
-     * titles are not unique, so this method just updates the first worksheet it
-     * finds.
+     * Performs a batch update of a worksheet's cells taking values from a list of {@link org.mule.module.google.spreadsheet.model.Row}
+     * taken from the message payload.
      * 
-     * @param title a String containing the name of the worksheet to delete.
+     * {@sample.xml ../../../doc/GoogleSpreadSheet-connector.xml.sample gss:set-row-values}
      * 
-     * @throws ServiceException when the request causes an error in the Google
-     *         Spreadsheets service.
-     * @throws IOException when an error occurs in communication with the Google
-     *         Spreadsheets service.
-     */
-    @Processor
-    public void deleteWorksheet(
-    		@OAuthAccessToken String accessToken,
-			@OAuthAccessTokenSecret String secretToken,
-			String spreadsheet,
-    		String worksheet,
-    		@Optional @Default("0") int spreadsheetIndex,
-			@Optional @Default("0") int worksheetIndex) throws IOException, ServiceException {
-    	
-    	this.getWorksheetEntry(accessToken, secretToken, spreadsheet, worksheet, spreadsheetIndex, worksheetIndex).delete();
-    }
-    
-    /**
-     * 
-     * @param accessToken
-     * @param secretToken
-     * @param worksheet
-     * @throws IOException
-     * @throws ServiceException
+     * @param accessToken OAuth accessToken
+     * @param secretToken OAuth secretToken
+     * @param rows a list of {@link org.mule.module.google.spreadsheet.model.Row} taken from the message payload describing the values to be set
+     * @param spreadsheet the title of the spreadsheet you want to update
+     * @param worksheet  the title of the worksheet you want to update
+     * @param spreadsheetIndex google's api allows for several spreadsheet to have the same name. In this cases
+     * 							it returns a list with all the ones matching the given title. Use this optional
+     * 							attribute to specify the zero-based list index of the want you want to use
+     * @param worksheetIndex google's api allows for several worksheets to have the same name. In this cases
+     * 							it returns a list with all the ones matching the given title. Use this optional
+     * 							attribute to specify the zero-based list index of the want you want to use
+     * @param purge if true, the worksheet will be purged before the values are set
+     * @throws Exception
      */
     @Processor
     public void setRowValues(
@@ -330,6 +420,33 @@ public class GoogleSpreadSheetModule {
     	this.batchSetCellValue(accessToken, secretToken, spreadsheet, worksheet, rows, spreadsheetIndex, worksheetIndex, processors);
     }
     
+    /**
+     * 
+     * Performs a batch update of a worksheet's cells taking values from a csv String.
+     * This csv file can have multiple lines and columns and you get to specify what those separators are. 
+     * You can manually specify the csv string or else it will automatically taken from the message payload
+     * 
+     * {@sample.xml ../../../doc/GoogleSpreadSheet-connector.xml.sample gss:set-csv-values}
+     * 
+     * @param accessToken OAuth accessToken
+     * @param secretToken OAuth secretToken
+     * @param rows a list of {@link org.mule.module.google.spreadsheet.model.Row} taken from the message payload describing the values to be set
+     * @param spreadsheet the title of the spreadsheet you want to update
+     * @param worksheet  the title of the worksheet you want to update
+     * @param csv the csv content to be set on the worksheet. You can manually specify it or else it will be taken from the message payload
+     * @param startingRow the number of the row where the first line of the csv will be set into. This is a 1-based index
+     * @param startingColumn the number of the column where the first value of each line of the csv will be set into. This is a 1-based index
+     * @param lineSeparator specifies the character to be used as a line separator
+     * @param columnSeparator specifies the character to be used as a column sperator
+     * @param spreadsheetIndex google's api allows for several spreadsheet to have the same name. In this cases
+     * 							it returns a list with all the ones matching the given title. Use this optional
+     * 							attribute to specify the zero-based list index of the want you want to use
+     * @param worksheetIndex google's api allows for several worksheets to have the same name. In this cases
+     * 							it returns a list with all the ones matching the given title. Use this optional
+     * 							attribute to specify the zero-based list index of the want you want to use
+     * @param purge if true, the worksheet will be purged before the values are set
+     * @throws Exception
+     */
     @Processor
     public void setCsvValues(
     		@OAuthAccessToken String accessToken,
@@ -352,6 +469,14 @@ public class GoogleSpreadSheetModule {
     		return;
     	}
     	
+    	if (StringUtils.isEmpty(lineSeparator)) {
+    		lineSeparator = "\n";
+    	}
+    	
+    	if (StringUtils.isEmpty(",")) {
+    		columnSeparator = ",";
+    	}
+    	
     	List<NestedProcessor> processors = new ArrayList<NestedProcessor>(1);
     	processors.add(new BatchUpdateCSVAdapter(this, startingRow, startingColumn, columnSeparator, lineSeparator));
     	
@@ -362,6 +487,22 @@ public class GoogleSpreadSheetModule {
     	this.batchSetCellValue(accessToken, secretToken, spreadsheet, worksheet, csv, spreadsheetIndex, worksheetIndex, processors);
     }
 
+    /**
+     * Returns a list of {@link com.google.gdata.data.Person} where each entry represent a a contributor
+     * on a specified spreadsheet
+     * 
+     * {@sample.xml ../../../doc/GoogleSpreadSheet-connector.xml.sample gss:get-authors}
+     * 
+     * @param accessToken OAuth accessToken
+     * @param secretToken OAuth secretToken
+     * @param spreadsheet the title of the spreadsheet from which the info should be taken from
+     * @param spreadsheetIndex google's api allows for several spreadsheet to have the same name. In this cases
+     * 							it returns a list with all the ones matching the given title. Use this optional
+     * 							attribute to specify the zero-based list index of the want you want to use
+     * @return a list of {@link com.google.gdata.data.Person} where each entry represent a spreadsheet's contributor
+     * @throws IOException
+     * @throws ServiceException
+     */
     @Processor
     public List<Person> getAuthors(
     		@OAuthAccessToken String accessToken,
@@ -372,14 +513,24 @@ public class GoogleSpreadSheetModule {
     	return this.getSpreadsheetEntry(accessToken, secretToken, spreadsheet, spreadsheetIndex).getAuthors();
     }
     
-    
     /**
-     * Retrieves the columns headers from the cell feed of the worksheet
-     * entry.
-     *
-     * @param worksheet worksheet entry containing the cell feed in question
-     * @return a list of column headers
-     * @throws Exception if error in retrieving the spreadsheet information
+     * This processor returns the cells on a worksheet's first row
+     * 
+     * {@sample.xml ../../../doc/GoogleSpreadSheet-connector.xml.sample gss:get-column-headers}
+     * 
+     * @param accessToken OAuth accessToken
+     * @param secretToken OAuth secretToken
+     * @param spreadsheet the title of the spreadsheet from which the info should be taken from
+     * @param worksheet the title of the worksheet from which the info should be taken from
+     * @param spreadsheetIndex google's api allows for several spreadsheet to have the same name. In this cases
+     * 							it returns a list with all the ones matching the given title. Use this optional
+     * 							attribute to specify the zero-based list index of the want you want to use
+     * @param worksheetIndex google's api allows for several worksheets to have the same name. In this cases
+     * 							it returns a list with all the ones matching the given title. Use this optional
+     * 							attribute to specify the zero-based list index of the want you want to use
+     * @return a list of {@link org.mule.module.google.spreadsheet.model.Cell}
+     * @throws IOException
+     * @throws ServiceException
      */
     @Processor
     public List<Cell> getColumnHeaders(
@@ -443,10 +594,10 @@ public class GoogleSpreadSheetModule {
     							@OAuthAccessToken String accessToken,
     							@OAuthAccessTokenSecret String secretToken,
     							String spreadsheet,
-    				    		String worksheet,
+    				    		String title,
     				    		@Optional @Default("0") int spreadsheetIndex) throws IOException, ServiceException {
     	
-    	return ModelParser.parseWorksheet(this.getWorksheetEntriesByTitle(accessToken, secretToken, spreadsheet, worksheet, spreadsheetIndex));
+    	return ModelParser.parseWorksheet(this.getWorksheetEntriesByTitle(accessToken, secretToken, spreadsheet, title, spreadsheetIndex));
     }
     
     /**
@@ -495,12 +646,12 @@ public class GoogleSpreadSheetModule {
 			@Optional @Default("0") int worksheetIndex,
     		int row,
     		int column,
-    		String formulaOrValue) throws IOException, ServiceException {
+    		@Optional @Default("#[payload:]") String formulaOrValue) throws Exception {
       
-    	URL cellFeedUrl = this.getWorksheetEntry(accessToken, secretToken, spreadsheet, worksheet, spreadsheetIndex, worksheetIndex).getCellFeedUrl();
-
-    	CellEntry newEntry = new CellEntry(row, column, formulaOrValue);
-    	this.getSsService(accessToken, secretToken).insert(cellFeedUrl, newEntry);
+    	
+    	List<NestedProcessor> processor = new ArrayList<NestedProcessor>(1); 
+    	processor.add(new BatchUpdateSingleCellAdapter(this, row, column));
+    	this.batchSetCellValue(accessToken, secretToken, spreadsheet, worksheet, formulaOrValue, spreadsheetIndex, worksheetIndex, processor);
     }
     
     /**
@@ -561,6 +712,10 @@ public class GoogleSpreadSheetModule {
     	
     	CellFeed batchRequest = message.getInvocationProperty(BATCH_REQUEST);
     	URL cellFeedUrl = message.getInvocationProperty(CELL_FEED_URL);
+    	
+    	if (batchRequest == null || cellFeedUrl == null) {
+    		throw new IllegalStateException("This operation can only be invoked as a nested processor for batch-set-cell-value");
+    	}
     	
         String batchId = "R" + row + "C" + col;
         URL entryUrl = new URL(cellFeedUrl.toString() + "/" + batchId);
@@ -728,19 +883,22 @@ public class GoogleSpreadSheetModule {
     }
     
     private SpreadsheetService getSsService(String accessToken, String secretToken) throws ServiceException {
-    	if (this.ssService == null) {
-    		this.ssService = this.connect(new SpreadsheetService(this.applicationName), accessToken, secretToken);
-    		
+    	if (this.ssServiceConnected == false) {
+    		this.ssServiceConnected = true;
+
     		// workaround for issue described in http://code.google.com/p/gdata-java-client/issues/detail?id=103
     		this.ssService.setHeader("If-Match", "*");
+    		
+    		this.connect(this.ssService, accessToken, secretToken);
     	}
     	
     	return this.ssService;
     }
     
     private DocsService getDocsService(String accessToken, String secretToken) throws ServiceException {
-    	if (this.docService == null) {
-    		this.docService = this.connect(new DocsService(this.applicationName), accessToken, secretToken);
+    	if (this.docsServiceConnected == false) {
+    		this.connect(this.docService, accessToken, secretToken);
+    		this.docsServiceConnected = true;
     	}
     	return this.docService;
     }
@@ -784,4 +942,29 @@ public class GoogleSpreadSheetModule {
 	public void setScope(String scope) {
 		this.scope = scope;
 	}
+
+	public String getApplicationName() {
+		return applicationName;
+	}
+
+	public void setApplicationName(String applicationName) {
+		this.applicationName = applicationName;
+	}
+
+	public SpreadsheetService getSsService() {
+		return ssService;
+	}
+
+	public void setSsService(SpreadsheetService ssService) {
+		this.ssService = ssService;
+	}
+
+	public DocsService getDocService() {
+		return docService;
+	}
+
+	public void setDocService(DocsService docService) {
+		this.docService = docService;
+	}
+	
 }

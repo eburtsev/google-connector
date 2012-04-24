@@ -178,11 +178,6 @@
 			<version>${mule.devkit.version}</version>
 		</dependency>
 		<dependency>
-			<groupId>oauth.signpost</groupId>
-			<artifactId>signpost-core</artifactId>
-			<version>1.2.1.1</version>
-		</dependency>
-		<dependency>
 			<groupId>org.eclipse</groupId>
 			<artifactId>eclipse-workbench</artifactId>
 			<version>3.6.1.M20100826-1330</version>

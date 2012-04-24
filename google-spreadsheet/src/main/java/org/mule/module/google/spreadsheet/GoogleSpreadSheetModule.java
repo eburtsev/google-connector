@@ -98,6 +98,35 @@ public class GoogleSpreadSheetModule {
 	 *
 	 * Retrieves the spreadsheets that the authenticated user has access to.
 	 *
+	 * {@sample.xml ../../../doc/GoogleDocs-connector.xml.sample
+	 * googledocs:listDocuments}
+	 *
+	 * @param title document title
+	 * @param email user email
+	 * @return list of documents
+	 * @throws OAuthException
+	 * @throws IOException
+	 * @throws ServiceException
+	 */
+	@Processor
+	public void share(String title, String email, @Optional @Default("reader") String role) throws OAuthException, IOException, ServiceException {
+		if (StringUtils.isEmpty(title) || StringUtils.isEmpty(email))
+			return;
+		DocumentListFeed feed = this.getDocsService().getFeed(new URL("https://docs.google.com/feeds/default/private/full"), DocumentListFeed.class);
+		for (DocumentListEntry e : feed.getEntries()) {
+			if (title.equalsIgnoreCase(e.getTitle().getPlainText())) {
+				AclEntry acl = new AclEntry();
+				acl.setScope(new AclScope(AclScope.Type.USER, email));
+				acl.setRole(new AclRole(role));
+				getDocsService().insert(new URL(e.getAclFeedLink().getHref()), acl);
+			}
+		}
+	}
+
+	/**
+	 *
+	 * Retrieves the spreadsheets that the authenticated user has access to.
+	 *
      * {@sample.xml ../../../doc/GoogleDocs-connector.xml.sample googledocs:listDocuments}
 	 *
 	 * @param accessToken

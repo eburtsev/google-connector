@@ -1,10 +1,12 @@
 package org.mule.module.google.spreadsheet.adapter;
 
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 
 import junit.framework.TestCase;
 
+import org.apache.commons.io.IOUtils;
 import org.mule.api.NestedProcessor;
 import org.mule.module.google.spreadsheet.GoogleSpreadsheetModuleStub;
 import org.mule.module.google.spreadsheet.model.Cell;
@@ -24,26 +26,26 @@ public class BatchUpdateAdaptersTest extends TestCase {
 		
 		NestedProcessor adapter = new BatchUpdateCSVAdapter(new GoogleSpreadsheetModuleStub(), 1, 1, columnSeparator, lineSeparator);
 		
-		String[] lines = new String[3];
-		lines[0] = "id,name,surname";
-		lines[1] = "1,john,doe";
-		lines[2] = "2,jane,smith";
+		InputStream in = this.getClass().getResourceAsStream("/delimited.csv");
 		
-		String payload = String.format("%s\n%s\n%s", lines[0], lines[1], lines[2]);
+		assertNotNull("could not get delimited file", in);
 		
+		String payload = IOUtils.toString(in);
+		String[] lines = payload.split(lineSeparator);
+
 		@SuppressWarnings("unchecked")
 		List<Row> rows = (List<Row>) adapter.process(payload);
 		
-		assertTrue("Was expecting 3 rows", rows.size() == 3);
+		assertTrue(String.format("Was expecting %d rows", lines.length), rows.size() == lines.length);
 		
 		for (int i = 0; i < rows.size(); i++) {
 			Row row = rows.get(i);
-			assertEquals("row number was not as expected", row.getRowNumber(), i+1);
-			
-			List<Cell> cells = row.getCells();
-			assertEquals("was expecting three cells", cells.size(), 3);
-			
 			String[] expectedCellValues = lines[i].split(columnSeparator);
+			
+			assertEquals("row number was not as expected", row.getRowNumber(), i+1);
+			List<Cell> cells = row.getCells();
+			assertEquals(String.format("Was expecting %d cells", expectedCellValues.length), cells.size(), expectedCellValues.length);
+			
 			
 			for (int j = 0; j < cells.size(); j++) {
 				Cell cell = cells.get(j);
@@ -68,4 +70,25 @@ public class BatchUpdateAdaptersTest extends TestCase {
 				
 	}
 	
+	public void testSingleAdapter() throws Exception {
+		final int row = 2;
+		final int column = 5;
+		final String formulaOrValue = "testing!";
+		
+		NestedProcessor adapter = new BatchUpdateSingleCellAdapter(new GoogleSpreadsheetModuleStub(), row, column);
+		
+		@SuppressWarnings("unchecked")
+		List<Row> result = (List<Row>) adapter.process(formulaOrValue);
+		
+		assertTrue(result.size() == 1);
+		
+		Row r = result.get(0);
+		assertEquals(r.getRowNumber(), row);
+		assertTrue(r.getCells().size() == 1);
+		
+		Cell cell = r.getCells().get(0);
+		assertEquals(cell.getRowNumber(), row);
+		assertEquals(cell.getColumnNumber(), column);
+		assertEquals(cell.getValueOrFormula(), formulaOrValue);
+	}
 }

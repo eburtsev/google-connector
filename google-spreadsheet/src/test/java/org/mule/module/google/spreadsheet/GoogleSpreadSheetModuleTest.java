@@ -38,7 +38,7 @@ public class GoogleSpreadSheetModuleTest extends FunctionalTestCase
     @Test
     public void testFlow() throws Exception
     {
-        runFlowAndExpect("testFlow", "Another string");
+        runFlowAndExpect("updateFromCsv", null);
     }
 
     /**
@@ -53,7 +53,9 @@ public class GoogleSpreadSheetModuleTest extends FunctionalTestCase
         MuleEvent event = AbstractMuleTestCase.getTestEvent(null);
         MuleEvent responseEvent = flow.process(event);
 
-        assertEquals(expect, responseEvent.getMessage().getPayload());
+        if (expect != null) {
+        	assertEquals(expect, responseEvent.getMessage().getPayload());
+        }
     }
 
     /**

@@ -796,7 +796,7 @@ public class GoogleSpreadSheetModule {
 	}
 
 	private SpreadsheetService getSsService() throws ServiceException {
-		if (this.ssService == null) {
+		if (!this.ssServiceConnected) {
 			this.connect(this.ssService);
 
 			// workaround for issue described in http://code.google.com/p/gdata-java-client/issues/detail?id=103
@@ -808,7 +808,7 @@ public class GoogleSpreadSheetModule {
 	}
 
 	private DocsService getDocsService() throws ServiceException {
-		if (this.docService == null) {
+		if (!this.docsServiceConnected) {
 			this.connect(this.docService);
     		this.docsServiceConnected = true;
 		}

@@ -686,7 +686,7 @@ public class GoogleSpreadSheetModule {
 			this.ssService = this.connect(new SpreadsheetService("Ss-" + this.applicationName));
 
 			// workaround for issue described in http://code.google.com/p/gdata-java-client/issues/detail?id=103
-			this.ssService.setHeader("If-Match", "*");
+			// this.ssService.setHeader("If-Match", "*");
 		}
 
 		return this.ssService;

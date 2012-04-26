@@ -24,13 +24,12 @@ import com.google.gdata.client.GoogleService;
 import com.google.gdata.client.authn.oauth.OAuthException;
 import com.google.gdata.client.docs.DocsService;
 import com.google.gdata.client.spreadsheet.*;
-import com.google.gdata.data.Link;
-import com.google.gdata.data.Person;
-import com.google.gdata.data.PlainTextConstruct;
+import com.google.gdata.data.*;
 import com.google.gdata.data.acl.AclEntry;
 import com.google.gdata.data.acl.AclRole;
 import com.google.gdata.data.acl.AclScope;
 import com.google.gdata.data.batch.BatchOperationType;
+import com.google.gdata.data.batch.BatchStatus;
 import com.google.gdata.data.batch.BatchUtils;
 import com.google.gdata.data.docs.DocumentListEntry;
 import com.google.gdata.data.docs.DocumentListFeed;
@@ -40,6 +39,7 @@ import java.io.IOException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import org.apache.commons.lang.StringUtils;
 import org.apache.log4j.Logger;
 import org.mule.RequestContext;
@@ -94,6 +94,7 @@ public class GoogleSpreadSheetModule {
 	@Default("Mule-GoogleDocsConnector/1.0")
 	private String applicationName;
 	private SpreadsheetService ssService = null;
+	private SpreadsheetService ssServiceForCreatingWorksheets = null;
 	private DocsService docService = null;
     
     private boolean docsServiceConnected = false;
@@ -108,7 +109,9 @@ public class GoogleSpreadSheetModule {
     	if (this.ssService == null) {
     		this.ssService = new SpreadsheetService(this.applicationName);
     	}
-    	
+    	if (this.ssServiceForCreatingWorksheets == null) {
+    		this.ssServiceForCreatingWorksheets = new SpreadsheetService(this.applicationName);
+    	}
     	if (this.docService == null) {
     		this.docService = new DocsService(this.applicationName);
     	}
@@ -226,7 +229,7 @@ public class GoogleSpreadSheetModule {
 		ws.setTitle(new PlainTextConstruct(title));
 		ws.setRowCount(rowCount);
 		ws.setColCount(colCount);
-		ws = this.getSsService().insert(ss.getWorksheetFeedUrl(), ws);
+		ws = this.getSsServiceForCreatingWorksheets().insert(ss.getWorksheetFeedUrl(), ws);
 
 		return new Worksheet(ws);
 	}
@@ -357,6 +360,14 @@ public class GoogleSpreadSheetModule {
     		return;
     	}
     	
+		for (Row row : rows) {
+			System.out.println(row.getRowNumber());
+			for (Cell cell : row.getCells()) {
+				System.out.print("\t" + cell.getColumnNumber() + ": ");
+				System.out.println(cell.getValueOrFormula());
+			}
+		}
+		
     	List<NestedProcessor> processors = new ArrayList<NestedProcessor>(1);
     	processors.add(new BatchUpdateRowAdapter(this));
     	
@@ -607,21 +618,31 @@ public class GoogleSpreadSheetModule {
     	URL cellFeedUrl = this.getWorksheetEntry(spreadsheet, worksheet, spreadsheetIndex, worksheetIndex).getCellFeedUrl();
     	
     	CellFeed batchRequest = new CellFeed();
-    	
-    	MuleMessage message = RequestContext.getEvent().getMessage();
+
+		MuleMessage message = RequestContext.getEvent().getMessage();
     	message.setInvocationProperty(BATCH_REQUEST, batchRequest);
     	message.setInvocationProperty(CELL_FEED_URL, cellFeedUrl);
     	
     	for (NestedProcessor proc : nestedProcessors) {
     		proc.process(payload);
     	}
-    	
-    	 // Get the batch feed URL and submit the batch requests
+
+		// Get the batch feed URL and submit the batch requests
         CellFeed feed = this.getSsService().getFeed(cellFeedUrl, CellFeed.class);
         Link batchLink = feed.getLink(Link.Rel.FEED_BATCH, Link.Type.ATOM);
         URL batchUrl = new URL(batchLink.getHref());
-        
-        this.getSsService().batch(batchUrl, batchRequest);
+        CellFeed batchResponse = this.getSsService().batch(batchUrl, batchRequest);
+		// Check the results
+		boolean isSuccess = true;
+		for (CellEntry entry : batchResponse.getEntries()) {
+			String batchId = BatchUtils.getBatchId(entry);
+			if (!BatchUtils.isSuccess(entry)) {
+				isSuccess = false;
+				BatchStatus status = BatchUtils.getBatchStatus(entry);
+				System.out.printf("%s failed (%s) %s", batchId, status.getReason(), status.getContent());
+			}
+		}
+	    System.out.println(isSuccess ? "\nBatch operations successful." : "\nBatch operations failed");
     }
 
     /**
@@ -800,11 +821,26 @@ public class GoogleSpreadSheetModule {
 			this.connect(this.ssService);
 
 			// workaround for issue described in http://code.google.com/p/gdata-java-client/issues/detail?id=103
-			// this.ssService.setHeader("If-Match", "*");
+			this.ssService.setHeader("If-Match", "*");
+			this.connect(this.ssServiceForCreatingWorksheets);
 			this.ssServiceConnected = true;
 		}
 
 		return this.ssService;
+	}
+
+	// Workaround for creating worksheets (related to http://code.google.com/p/gdata-java-client/issues/detail?id=103)
+	private SpreadsheetService getSsServiceForCreatingWorksheets() throws ServiceException {
+		if (!this.ssServiceConnected) {
+			this.connect(this.ssService);
+
+			// workaround for issue described in http://code.google.com/p/gdata-java-client/issues/detail?id=103
+			this.ssService.setHeader("If-Match", "*");
+			this.connect(this.ssServiceForCreatingWorksheets);
+			this.ssServiceConnected = true;
+		}
+
+		return this.ssServiceForCreatingWorksheets;
 	}
 
 	private DocsService getDocsService() throws ServiceException {

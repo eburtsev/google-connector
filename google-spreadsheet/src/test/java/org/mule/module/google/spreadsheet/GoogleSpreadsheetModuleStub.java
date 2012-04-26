@@ -8,7 +8,7 @@ package org.mule.module.google.spreadsheet;
 public class GoogleSpreadsheetModuleStub extends GoogleSpreadSheetModule {
 
 	@Override
-	public void cellValue(int row, int col, String formulaOrValue) throws Exception {
+	public void cellValue(String row, String col, String formulaOrValue) throws Exception {
 		// do nothing
 	}
 	

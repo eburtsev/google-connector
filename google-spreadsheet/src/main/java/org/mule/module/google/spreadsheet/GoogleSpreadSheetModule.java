@@ -653,7 +653,7 @@ public class GoogleSpreadSheetModule {
      * @throws Exception
      */
     @Processor
-    public void cellValue(int row, int col, String formulaOrValue) throws Exception {
+    public void cellValue(String row, String col, String formulaOrValue) throws Exception {
     	
     	MuleMessage message = RequestContext.getEvent().getMessage();
     	

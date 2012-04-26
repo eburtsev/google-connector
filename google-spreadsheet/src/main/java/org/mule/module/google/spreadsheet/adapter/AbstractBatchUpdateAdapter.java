@@ -32,7 +32,7 @@ public abstract class AbstractBatchUpdateAdapter implements NestedProcessor {
 		for (Row row : rows) {
 			int rowNumber = row.getRowNumber();
 			for (Cell cell : row.getCells()) {
-				this.getModule().cellValue(rowNumber, cell.getColumnNumber(), cell.getValueOrFormula());
+				this.getModule().cellValue(Integer.toString(rowNumber), Integer.toString(cell.getColumnNumber()), cell.getValueOrFormula());
 			}
 		}
 		

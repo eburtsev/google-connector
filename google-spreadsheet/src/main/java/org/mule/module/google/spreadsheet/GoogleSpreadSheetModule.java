@@ -24,7 +24,9 @@ import com.google.gdata.client.GoogleService;
 import com.google.gdata.client.authn.oauth.OAuthException;
 import com.google.gdata.client.docs.DocsService;
 import com.google.gdata.client.spreadsheet.*;
-import com.google.gdata.data.*;
+import com.google.gdata.data.Link;
+import com.google.gdata.data.Person;
+import com.google.gdata.data.PlainTextConstruct;
 import com.google.gdata.data.acl.AclEntry;
 import com.google.gdata.data.acl.AclRole;
 import com.google.gdata.data.acl.AclScope;
@@ -39,7 +41,6 @@ import java.io.IOException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 import org.apache.commons.lang.StringUtils;
 import org.apache.log4j.Logger;
 import org.mule.RequestContext;
@@ -359,15 +360,7 @@ public class GoogleSpreadSheetModule {
     		logger.warn("Worksheet contains no rows... skipping update and possible purge");
     		return;
     	}
-    	
-		for (Row row : rows) {
-			System.out.println(row.getRowNumber());
-			for (Cell cell : row.getCells()) {
-				System.out.print("\t" + cell.getColumnNumber() + ": ");
-				System.out.println(cell.getValueOrFormula());
-			}
-		}
-		
+
     	List<NestedProcessor> processors = new ArrayList<NestedProcessor>(1);
     	processors.add(new BatchUpdateRowAdapter(this));
     	

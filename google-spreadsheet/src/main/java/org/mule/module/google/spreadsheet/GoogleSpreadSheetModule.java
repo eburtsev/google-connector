@@ -37,6 +37,7 @@ import com.google.gdata.data.docs.DocumentListEntry;
 import com.google.gdata.data.docs.DocumentListFeed;
 import com.google.gdata.data.spreadsheet.*;
 import com.google.gdata.util.ServiceException;
+import com.google.gdata.util.VersionConflictException;
 import java.io.IOException;
 import java.net.URL;
 import java.util.ArrayList;
@@ -157,7 +158,11 @@ public class GoogleSpreadSheetModule {
 				AclEntry acl = new AclEntry();
 				acl.setScope(new AclScope(AclScope.Type.USER, email));
 				acl.setRole(new AclRole(role));
-				getDocsService().insert(new URL(e.getAclFeedLink().getHref()), acl);
+				try {
+					getDocsService().insert(new URL(e.getAclFeedLink().getHref()), acl);
+				} catch (VersionConflictException exception) {
+					logger.debug(exception, exception);
+				}
 			}
 		}
 	}
@@ -222,14 +227,14 @@ public class GoogleSpreadSheetModule {
 			String spreadsheet,
 			@Optional @Default("0") int spreadsheetIndex,
 			String title,
-			int rowCount,
-			int colCount) throws IOException, ServiceException {
+			String rowCount,
+			String colCount) throws IOException, ServiceException {
 
 		SpreadsheetEntry ss = this.getSpreadsheetEntry(spreadsheet, spreadsheetIndex);
 		WorksheetEntry ws = new WorksheetEntry();
 		ws.setTitle(new PlainTextConstruct(title));
-		ws.setRowCount(rowCount);
-		ws.setColCount(colCount);
+		ws.setRowCount(Integer.parseInt(rowCount));
+		ws.setColCount(Integer.parseInt(colCount));
 		ws = this.getSsServiceForCreatingWorksheets().insert(ss.getWorksheetFeedUrl(), ws);
 
 		return new Worksheet(ws);
@@ -258,8 +263,12 @@ public class GoogleSpreadSheetModule {
 		    		@Optional @Default("0") int spreadsheetIndex,
 		    		@Optional @Default("0") int worksheetIndex) throws IOException, ServiceException {
     	
-    	WorksheetEntry ws = this.getItem(this.getWorksheetEntriesByTitle(spreadsheet, worksheet, spreadsheetIndex), worksheetIndex);
-    	ws.delete();
+		try {
+			WorksheetEntry ws = this.getItem(this.getWorksheetEntriesByTitle(spreadsheet, worksheet, spreadsheetIndex), worksheetIndex);
+			ws.delete();
+		} catch (IllegalArgumentException e) {
+			logger.debug(e, e);
+		}
     }
 
     /**

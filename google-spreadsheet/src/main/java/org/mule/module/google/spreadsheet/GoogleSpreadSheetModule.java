@@ -21,7 +21,10 @@
 package org.mule.module.google.spreadsheet;
 
 import com.google.gdata.client.GoogleService;
+import com.google.gdata.client.authn.oauth.GoogleOAuthParameters;
 import com.google.gdata.client.authn.oauth.OAuthException;
+import com.google.gdata.client.authn.oauth.OAuthHmacSha1Signer;
+import com.google.gdata.client.authn.oauth.OAuthParameters;
 import com.google.gdata.client.docs.DocsService;
 import com.google.gdata.client.spreadsheet.*;
 import com.google.gdata.data.Link;
@@ -77,20 +80,27 @@ public class GoogleSpreadSheetModule {
 	 * The OAuth consumer key
 	 */
 	@Configurable
-	private String username;
+	private String consumerKey;
 
 	/**
 	 * The OAuth consumer secret
 	 */
 	@Configurable
-	private String password;
+	private String consumerSecret;
 
+	/**
+	 * The OAuth scope
+	 */
 	@Configurable
 	@Optional
 	@Default("https://docs.google.com/feeds/private/full https://spreadsheets.google.com/feeds http://spreadsheets.google.com/feeds")
 	private String scope;
 
 	private FeedURLFactory factory = FeedURLFactory.getDefault();
+
+	/**
+	 * The OAuth consumer secret
+	 */
 	@Configurable
 	@Optional
 	@Default("Mule-GoogleDocsConnector/1.0")
@@ -98,9 +108,6 @@ public class GoogleSpreadSheetModule {
 	private SpreadsheetService ssService = null;
 	private SpreadsheetService ssServiceForCreatingWorksheets = null;
 	private DocsService docService = null;
-    
-    private boolean docsServiceConnected = false;
-	private boolean ssServiceConnected = false;
     
     /**
      * Instanciates {@link org.mule.module.google.spreadsheet.GoogleSpreadSheetModule.ssService} and
@@ -117,8 +124,40 @@ public class GoogleSpreadSheetModule {
     	if (this.docService == null) {
     		this.docService = new DocsService(this.applicationName);
     	}
+		this.ssService.setHeader("If-Match", "*");
     }
-    
+
+	/**
+     * Authorizes connector using given oauth token and oauth token secret
+     * 
+     * {@sample.xml ../../../doc/GoogleSpreadSheet-connector.xml.sample gss:get-all-spreadsheets}
+     * 
+	 * @param oauthToken oauthToken
+	 * @param oauthTokenSecret oauthTokenSecret
+	 * 
+	 * @throws ServiceException
+     */
+    @Processor
+    public void authorize(String oauthToken, String oauthTokenSecret) throws ServiceException {
+		init();
+		connect(docService, oauthToken, oauthTokenSecret);
+        connect(ssService, oauthToken, oauthTokenSecret);
+		connect(ssServiceForCreatingWorksheets, oauthToken, oauthTokenSecret);
+    }
+
+	/**
+     * Shutdowns connector
+     * 
+     * {@sample.xml ../../../doc/GoogleSpreadSheet-connector.xml.sample gss:get-all-spreadsheets}
+     * 
+     */
+    @Processor
+    public void shutdown() {
+		docService = null;
+        ssService = null;
+		ssServiceForCreatingWorksheets = null;
+    }
+
     /**
      * Returns all the spreadsheets associated with the user's account
      * 
@@ -819,43 +858,26 @@ public class GoogleSpreadSheetModule {
 	}
 
 	private SpreadsheetService getSsService() throws ServiceException {
-		if (!this.ssServiceConnected) {
-			this.connect(this.ssService);
-
-			// workaround for issue described in http://code.google.com/p/gdata-java-client/issues/detail?id=103
-			this.ssService.setHeader("If-Match", "*");
-			this.connect(this.ssServiceForCreatingWorksheets);
-			this.ssServiceConnected = true;
-		}
-
 		return this.ssService;
 	}
 
 	// Workaround for creating worksheets (related to http://code.google.com/p/gdata-java-client/issues/detail?id=103)
 	private SpreadsheetService getSsServiceForCreatingWorksheets() throws ServiceException {
-		if (!this.ssServiceConnected) {
-			this.connect(this.ssService);
-
-			// workaround for issue described in http://code.google.com/p/gdata-java-client/issues/detail?id=103
-			this.ssService.setHeader("If-Match", "*");
-			this.connect(this.ssServiceForCreatingWorksheets);
-			this.ssServiceConnected = true;
-		}
-
 		return this.ssServiceForCreatingWorksheets;
 	}
 
 	private DocsService getDocsService() throws ServiceException {
-		if (!this.docsServiceConnected) {
-			this.connect(this.docService);
-    		this.docsServiceConnected = true;
-		}
 		return this.docService;
 	}
 
-	private <T extends GoogleService> T connect(T service) throws ServiceException {
+	private <T extends GoogleService> T connect(T service, String oauthToken, String oauthTokenSecret) throws ServiceException {
 		try {
-			service.setUserCredentials(this.username, this.password);
+			OAuthParameters params = new GoogleOAuthParameters();
+			params.setOAuthConsumerKey(consumerKey);
+			params.setOAuthConsumerSecret(consumerSecret);
+			params.setOAuthToken(oauthToken);
+			params.setOAuthTokenSecret(oauthTokenSecret);
+			service.setOAuthCredentials(params, new OAuthHmacSha1Signer());
 		} catch (Exception e) {
 			throw new ServiceException(e);
 		}
@@ -879,19 +901,19 @@ public class GoogleSpreadSheetModule {
 		this.applicationName = applicationName;
 	}
 
-	public String getPassword() {
-		return password;
+	public String getConsumerKey() {
+		return consumerKey;
 	}
 
-	public void setPassword(String password) {
-		this.password = password;
+	public void setConsumerKey(String consumerKey) {
+		this.consumerKey = consumerKey;
 	}
 
-	public String getUsername() {
-		return username;
+	public String getConsumerSecret() {
+		return consumerSecret;
 	}
 
-	public void setUsername(String username) {
-		this.username = username;
+	public void setConsumerSecret(String consumerSecret) {
+		this.consumerSecret = consumerSecret;
 	}
 }

@@ -146,6 +146,24 @@ public class GoogleSpreadSheetModule {
     }
 
 	/**
+     * Authorizes connector using given username and password
+     * 
+     * {@sample.xml ../../../doc/GoogleSpreadSheet-connector.xml.sample gss:get-all-spreadsheets}
+     * 
+	 * @param username username
+	 * @param password password
+	 * 
+	 * @throws ServiceException
+     */
+    @Processor
+    public void authorizeByUserCredentials(String username, String password) throws ServiceException {
+		init();
+		connectByUserCredentials(docService, username, password);
+        connectByUserCredentials(ssService, username, password);
+		connectByUserCredentials(ssServiceForCreatingWorksheets, username, password);
+    }
+
+	/**
      * Shutdowns connector
      * 
      * {@sample.xml ../../../doc/GoogleSpreadSheet-connector.xml.sample gss:get-all-spreadsheets}
@@ -878,6 +896,16 @@ public class GoogleSpreadSheetModule {
 			params.setOAuthToken(oauthToken);
 			params.setOAuthTokenSecret(oauthTokenSecret);
 			service.setOAuthCredentials(params, new OAuthHmacSha1Signer());
+		} catch (Exception e) {
+			throw new ServiceException(e);
+		}
+
+		return service;
+	}
+
+	private <T extends GoogleService> T connectByUserCredentials(T service, String username, String password) throws ServiceException {
+		try {
+			service.setUserCredentials(username, password);
 		} catch (Exception e) {
 			throw new ServiceException(e);
 		}
